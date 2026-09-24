@@ -1,0 +1,53 @@
+# kube-prometheus-stack 91.5.0 — trimmed for a laptop kind cluster (D-003).
+# Install:
+#   kubectl create namespace monitoring
+#   kubectl -n monitoring create secret generic grafana-admin \
+#     --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
+#   helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
+#     -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+
+alertmanager: {enabled: false}          # no alert routing in MVP
+
+# Control-plane scrape targets: not needed for workload analysis, and many series.
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeProxy: {enabled: false}
+kubeApiServer: {enabled: false}
+
+grafana:
+  admin: {existingSecret: grafana-admin}   # password never in values or git
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 384Mi}
+
+kube-state-metrics:
+  # Default collectors include secrets and configmaps (list/watch → Secret values).
+  # The chart's RBAC follows this list, so those permissions disappear too.
+  collectors:
+  - cronjobs
+  - daemonsets
+  - deployments
+  - horizontalpodautoscalers
+  - jobs
+  - namespaces
+  - nodes
+  - persistentvolumeclaims
+  - persistentvolumes
+  - pods
+  - replicasets
+  - services
+  - statefulsets
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 5GB                     # must stay below the PVC size
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+      limits: {memory: 1Gi}
+    storageSpec:                           # default is emptyDir: history lost on pod restart
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: {requests: {storage: 8Gi}}

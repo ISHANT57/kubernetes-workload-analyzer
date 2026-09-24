@@ -60,7 +60,23 @@ tests/      integration and failure tests
 
 ## Local setup
 
-Coming in Phase 1.
+Requires Docker, [kind](https://kind.sigs.k8s.io/) v0.33+, kubectl, Helm v4. Tested on Ubuntu 26.04
+with kind v0.33.0 / Kubernetes v1.37.0.
+
+```bash
+kind create cluster --name workload-analyzer --wait 180s
+kubectl apply -k deploy/metrics-server            # HPA support (kind-only TLS flag)
+kubectl create namespace monitoring
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
+  -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+kubectl -n monitoring port-forward svc/kps-grafana 3000:80   # Grafana on localhost only
+```
+
+Measured footprint and verification results: [docs/architecture.md](docs/architecture.md).
+Hands-on lab notes: [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamentals.md).
 
 ## Limitations (known now)
 

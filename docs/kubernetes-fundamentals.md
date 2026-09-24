@@ -83,3 +83,22 @@ Relevance to the analyzer: lowering a request on an HPA-managed workload *increa
 allocation here — R001 must emit the HPA-coupled caveat and the HPA-neutral request
 (usage / target = 300m / 0.7 ≈ 430m), never a plain resize. Use workload-level aggregates, not
 single pods, for HPA-managed workloads. New pods have no metrics at first (R005 case).
+
+## 06 — Monitoring stack verification (2026-09-24)
+Values: `deploy/prometheus/values.yaml` (kube-prometheus-stack 91.5.0). Conditions were triggered by
+re-applying `learn/03-resources.yaml` and the HPA from `learn/05-hpa.yaml` (without load) for ~4 min.
+
+| Check | Result | Query / command |
+|---|---|---|
+| Scrape targets | all `up` (coredns, grafana, operator, prometheus, kubelet ×3, KSM, node-exporter) | `up` |
+| OOM (KSM) | restarts 5; `last_terminated_reason` = `OOMKilled` | `kube_pod_container_status_last_terminated_reason == 1` |
+| OOM (cAdvisor) | `container_oom_events_total` = **0** through 5 real OOMs → not usable | `max_over_time(container_oom_events_total{pod="oom"}[5m])` |
+| CrashLoopBackOff | visible only with a range: instant query missed it between restarts | `max_over_time(kube_pod_container_status_waiting_reason[6m]) == 1` |
+| Unschedulable | `pending-cpu`, `pending-selector` = 1 | `kube_pod_status_unschedulable` |
+| Throttling | ratio 1.0 (100%), usage 172m vs 200m limit; series exist only for CPU-limited containers; extra pod-level series with empty `container` | `rate(throttled_periods)/rate(periods)` |
+| HPA | `hpa-demo → Deployment/hpa-demo`, target cpu Utilization 70 | `kube_horizontalpodautoscaler_info`, `_spec_target_metric` |
+| KSM RBAC | secrets/configmaps: no; `kube_secret_*` series: 0 | `kubectl auth can-i list secrets -A --as=system:serviceaccount:monitoring:kps-kube-state-metrics` |
+| Grafana auth | no creds 401, wrong password 401, admin login OK | `curl -u admin:<pw> localhost:3300/api/user` (port-forward) |
+
+Relevance to the analyzer: absent state-metric series mean "condition not present", not missing
+data; filter `container!=""`; use range queries for short-lived states; R004 uses KSM only.

@@ -30,7 +30,23 @@ monitoring stack footprint is still an ESTIMATE until Phase 1 measures it.
 | Node image | `kindest/node:v1.37.0`, 1.34 GB on disk | MEASURED |
 | Node allocatable | 12 CPU, 14.79 GiB (the whole laptop; workload memory limits protect the desktop) | MEASURED |
 | Storage | `standard` StorageClass (local-path), default, `WaitForFirstConsumer` | MEASURED |
-| Node container restart policy | `on-failure:1`; survival across host reboot UNVERIFIED (Phase 6 test) | MEASURED |
+| Node container restart policy | `on-failure:1`; survival across host reboot UNVERIFIED (Phase 7 test) | MEASURED |
+
+### Measured monitoring footprint (2026-09-24, kube-prometheus-stack 91.5.0, Helm v4.3.0)
+
+| Item | Value | Label |
+|---|---|---|
+| Install time | 4 min 32 s (`helm install --wait`); Prometheus pod Ready ~4.5 min after start | MEASURED |
+| Grafana pod | ~400 MiB total: grafana 246 MiB + dashboard sidecar 73 MiB + datasource sidecar 72 MiB | MEASURED |
+| Prometheus | 85 MiB at start → 126 MiB after ~20 min (+10 MiB config-reloader); limit 1Gi | MEASURED |
+| Operator / kube-state-metrics / node-exporter | ~28 / ~20 / ~11 MiB | MEASURED |
+| Monitoring pods total | ~580 MiB (metrics-server `top`) | MEASURED |
+| metrics-server | 15 MiB used (requests 200Mi) | MEASURED |
+| Node container (`docker stats`) | ~770 MiB before install → ~2.2 GiB after; includes reclaimable file cache from image pulls, so it overstates the real cost | MEASURED |
+| Host available memory | 7098 → 6274 MiB (−824 MiB; desktop apps also changed in between) | MEASURED |
+| Active series / ingestion | 13.7k → 15.5k series; ~600 samples/s | MEASURED |
+| Prometheus disk | 2.8 MB after ~20 min; ~80 MB/day projected from 600 samples/s × ~1.5 B/sample → ~0.6 GB for 7d, well under the 5GB cap | ESTIMATED |
+| Scrape targets | coredns, grafana, operator, prometheus, kubelet (incl. cAdvisor), kube-state-metrics, node-exporter: all `up` | MEASURED |
 
 ## Shape: modular monolith
 

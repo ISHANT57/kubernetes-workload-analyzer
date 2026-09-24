@@ -45,6 +45,9 @@ Conclusion: "read-only" is **not** "harmless". Pod read access is sensitive.
 | Prometheus / Grafana / Alertmanager UIs reachable from the network | ClusterIP services only; access via port-forward; no NodePort/Ingress in MVP |
 | kubeconfig committed or logged | `.gitignore` covers kubeconfig, `.env`, keys; the backend never logs config values that could hold credentials |
 | Malicious or oversized PromQL results (label injection into HTML) | Escape all label values in HTML output; cap result sizes; per-query timeouts |
+| KSM secrets exposure (VERIFIED fixed) | `auth can-i list/watch secrets` and `list configmaps` for the KSM ServiceAccount → `no`; ClusterRole has no secrets/configmaps rules; `kube_secret_*`/`kube_configmap_*` series: 0 |
+| Grafana access (VERIFIED) | No credentials → 401; wrong password → 401; admin from `grafana-admin` Secret works; the chart created no password Secret of its own; image has no shell. All monitoring Services are ClusterIP |
+| System components that can read pod specs | kube-state-metrics (`list pods` yes, needed for pod metrics) and metrics-server (`get/list/watch pods`) — upstream components, trusted in the lab; the analyzer itself still has no `pods` access (D-007) |
 | Fixtures consume host resources (DoS on the laptop) | Fixtures have limits; total CPU under ~1 core; OOM/crash pods back off |
 | Unrelated containers on the same Docker host | The local cluster must not share networks or volumes with them; do not touch them |
 

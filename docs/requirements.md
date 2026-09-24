@@ -42,10 +42,10 @@ metrics must be filtered (`container!="", container!="POD"`).
 | Workload identity | `kube_pod_owner`, `kube_replicaset_owner`, `kube_pod_info` | KSM |
 | Requests / limits | `kube_pod_container_resource_requests{resource="cpu"\|"memory"}`, `kube_pod_container_resource_limits` | KSM |
 | CPU usage | `rate(container_cpu_usage_seconds_total[5m])` (or the stack's recording rule) | cAdvisor |
-| CPU throttling | `container_cpu_cfs_throttled_periods_total`, `container_cpu_cfs_periods_total` | cAdvisor |
+| CPU throttling | `container_cpu_cfs_throttled_periods_total`, `container_cpu_cfs_periods_total` — emitted **only for containers with a CPU limit**; absent otherwise (VERIFIED) | cAdvisor |
 | Memory usage | `container_memory_working_set_bytes` (what the OOM killer and eviction act on) | cAdvisor |
 | Restarts | `kube_pod_container_status_restarts_total` | KSM |
-| OOM | `kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}` (EXPERIMENTAL in KSM) combined with restart increase; `container_oom_events_total` exists in kubelet since 1.24 but is reported to stay at 0 (cAdvisor issue) — test with fixture #2 before relying on it | KSM / cAdvisor |
+| OOM | `kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}` (EXPERIMENTAL in KSM) combined with restart increase (VERIFIED: 5 OOMs → reason `OOMKilled`, restarts 5). **Not used:** `container_oom_events_total` stayed 0 through 5 real OOMs (VERIFIED); `node_vmstat_oom_kill` is node-wide, cannot be attributed to a container | KSM |
 | CrashLoop / image errors | `kube_pod_container_status_waiting_reason{reason=~"CrashLoopBackOff\|ImagePullBackOff\|ErrImagePull\|CreateContainerConfigError"}` | KSM |
 | Pending | `kube_pod_status_phase{phase="Pending"}`, `kube_pod_status_unschedulable` | KSM |
 | Deployment availability | `kube_deployment_spec_replicas`, `kube_deployment_status_replicas_available` | KSM |
@@ -54,7 +54,16 @@ metrics must be filtered (`container!="", container!="POD"`).
 | Data coverage | `count_over_time(<usage series>[window])` vs expected sample count | derived |
 
 **Known limitation:** `last_terminated_reason` only shows the *most recent* termination. To count
-OOMs, combine a restart increase with that reason, or use `container_oom_events_total`.
+OOMs, combine a restart increase with that reason.
+
+**Absent series ≠ missing data (VERIFIED in Phase 1).** State metrics such as `waiting_reason`,
+`kube_pod_status_unschedulable`, HPA metrics and CPU throttling exist only while the condition or
+object exists. For these, "no series" means "condition not present". For usage metrics
+(`container_cpu_usage_seconds_total`, `container_memory_working_set_bytes`), no series means
+missing data → R005 `insufficient`. Also: cAdvisor returns a pod-level series with empty
+`container` label next to each container series; always filter `container!=""`.
+Instant queries can miss short states (a CrashLoopBackOff between restarts); use
+`max_over_time(...[window])`.
 
 ## 3. MVP rules (thresholds are proposals until validated on demo workloads)
 

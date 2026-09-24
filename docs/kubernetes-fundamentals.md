@@ -65,3 +65,21 @@ Manifest: `learn/04-config-secret-rbac.yaml`; Secret created by command (never c
 
 Relevance to the analyzer: D-007 ClusterRole verified; RBAC tests must run with an isolated
 kubeconfig and assert identity with `kubectl auth whoami`.
+
+## 05 — HPA and the request/utilization coupling (2026-09-24)
+Manifest: `learn/05-hpa.yaml` (resource-consumer 1.15.0; load pod sends ~300m total via the Service;
+HPA target 70% CPU utilization, min 1, max 5). Needs metrics-server (`deploy/metrics-server`).
+
+| Experiment | Observation | Command |
+|---|---|---|
+| New pod | First ~45 s: `FailedGetResourceMetric: no metrics returned` / `pods might be unready` | `kubectl -n learn describe hpa hpa-demo` |
+| Phase A: request 400m | 300m used → 75% → stays at 1 replica (75/70 = 1.07, within 10% tolerance) | `kubectl -n learn get hpa hpa-demo` |
+| Phase B: request → 200m | 150% → `SuccessfulRescale: New size: 3` (ceil(1 × 150/70) = 3; my prediction of 2 was an arithmetic error) | `kubectl -n learn patch deploy hpa-demo ...` |
+| After scale-out | 40–62% utilization; stays at 3 (scale-down needs < ~47% and a 5-min stabilization window) | same |
+| Totals | CPU requested 400m → **600m**; memory requested 64Mi → **192Mi**; pods 1 → 3 | `kubectl -n learn get deploy hpa-demo` |
+| Load spread | Snapshot 190m / 0m / 1m across pods: few requests + random Service routing = uneven pods | `kubectl -n learn top pods -l app=hpa-demo` |
+
+Relevance to the analyzer: lowering a request on an HPA-managed workload *increased* total
+allocation here — R001 must emit the HPA-coupled caveat and the HPA-neutral request
+(usage / target = 300m / 0.7 ≈ 430m), never a plain resize. Use workload-level aggregates, not
+single pods, for HPA-managed workloads. New pods have no metrics at first (R005 case).

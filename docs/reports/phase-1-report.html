@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 1 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-1-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-1-report.pdf docs/reports/phase-1-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <h1>Phase 1 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — local cluster, Kubernetes fundamentals and verified monitoring</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-24)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-25</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>63454cc</code> (PR #1 and PR #2 merged)</td></tr>
+    <tr><td><b>Cluster</b></td><td>kind <code>workload-analyzer</code>, Kubernetes v1.37.0, single node</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<!-- ============================ CONTENTS ============================ -->
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 1 was for</li>
+    <li>Outcome against the done-criteria</li>
+    <li>Machine and tooling</li>
+    <li>The kind cluster</li>
+    <li>Lab 01 — Deployment, ReplicaSet, Pod</li>
+    <li>Lab 02 — Service and probes</li>
+    <li>Lab 03 — Resources, QoS, OOM, throttling, scheduling</li>
+    <li>Lab 04 — ConfigMap, Secret, RBAC</li>
+    <li>metrics-server</li>
+    <li>Lab 05 — HPA and the request coupling</li>
+    <li>The monitoring stack</li>
+    <li>Lab 06 — Verifying every metric</li>
+    <li>Security verification</li>
+    <li>What Phase 1 changed in the analyzer design</li>
+    <li>Mistakes and corrections</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state, operating and rollback</li>
+    <li>Open items and next phase</li>
+    <li>Appendix A — Command cheat sheet</li>
+    <li>Appendix B — Glossary</li>
+  </ol>
+</section>
+
+<!-- ============================ 1 ============================ -->
+<section class="pb">
+  <h2>1. What Phase 1 was for</h2>
+  <p>The project builds an analyzer that turns Kubernetes and Prometheus data into evidence-based findings
+  (for example "this workload requests far more CPU than it uses"). Phase 1 did not write analyzer code.
+  It had two jobs:</p>
+  <ol>
+    <li><b>Learn the Kubernetes behaviour the analyzer will reason about</b>, by running small, deliberate
+    experiments and writing down what actually happened, not what documentation suggests.</li>
+    <li><b>Build and verify the data layer</b>: a local cluster plus a trimmed Prometheus stack, and prove
+    that every metric the planned rules (R001–R005) depend on really exists and behaves as expected.</li>
+  </ol>
+  <p>Prometheus was installed at the end of Phase 1 on purpose (decision taken 2026-09-24): rightsizing rules need
+  days of history, so the history clock should start as early as possible, while later phases are being built.</p>
+
+  <h3>Decisions in force during Phase 1</h3>
+  <table>
+    <tr><th>ID</th><th>Decision</th><th>Status</th></tr>
+    <tr><td>D-001</td><td>Backend in Go (toolchain 1.27)</td><td>ACCEPTED</td></tr>
+    <tr><td>D-002</td><td>Dashboard: React + Vite + TypeScript + uPlot, served as static files by the backend; Grafana for raw time series</td><td>ACCEPTED</td></tr>
+    <tr><td>D-003</td><td>Trimmed kube-prometheus-stack with persistent storage</td><td>ACCEPTED</td></tr>
+    <tr><td>D-004</td><td>No application database in the MVP</td><td>PROPOSED</td></tr>
+    <tr><td>D-005</td><td>kind, single node (k3d fallback if RAM gets tight)</td><td>ACCEPTED</td></tr>
+    <tr><td>D-006</td><td>Portfolio/demo positioning: unified, explainable findings; KRR/OpenCost as baselines</td><td>ACCEPTED</td></tr>
+    <tr><td>D-007</td><td>Backend API access: read-only ClusterRole on structure + Events; no pods, secrets, configmaps</td><td>ACCEPTED</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 2 ============================ -->
+<section>
+  <h2>2. Outcome against the done-criteria</h2>
+  <table>
+    <tr><th>Done-criterion (PHASES.md)</th><th>Result</th></tr>
+    <tr><td>Tools installed; one-node cluster created</td><td>Done. kubectl v1.37.0, kind v0.33.0, Helm v4.3.0 (checksums verified); cluster Ready after 16 s</td></tr>
+    <tr><td>Every concept has a lab-notes entry</td><td>Done for Pod, Deployment, ReplicaSet, Service, Namespace, ConfigMap, Secret, requests/limits, probes, labels/selectors, Events, RBAC, HPA, scheduling, pod-level failure/recovery. <b>Cluster-level recovery</b> (Docker restart, reboot) was moved to Phase 7.</td></tr>
+    <tr><td>Prometheus footprint MEASURED</td><td>Done. Monitoring pods ~580 MiB; ~15.5k active series; ~600 samples/s</td></tr>
+    <tr><td>All measurement-model metrics return data</td><td>Done, under real conditions (OOM, crash loop, Pending, throttling, HPA)</td></tr>
+    <tr><td>kube-state-metrics cannot list secrets</td><td>Done. <code>auth can-i</code> → no; zero <code>kube_secret_*</code> series</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 3 ============================ -->
+<section class="pb">
+  <h2>3. Machine and tooling</h2>
+  <h3>3.1 Machine <span class="tag m">MEASURED</span> (2026-09-23)</h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>OS</td><td>Ubuntu 26.04.1 LTS, kernel 7.0.0-31-generic, x86_64</td></tr>
+    <tr><td>CPU</td><td>Intel i5-1235U: 10 physical cores (2 performance cores with hyper-threading + 8 efficiency cores), 12 logical CPUs</td></tr>
+    <tr><td>RAM</td><td>14.79 GiB total; roughly 6.5–10 GiB available depending on open desktop apps; 4 GiB swap file</td></tr>
+    <tr><td>Disk</td><td>ext4, 140 GB, 75 GB free after cleanup</td></tr>
+    <tr><td>Docker</td><td>29.1.3, cgroup v2, containerd image store (image data lives in <code>/var/lib/containerd</code>)</td></tr>
+    <tr><td>inotify</td><td><code>max_user_instances=128</code>, <code>max_user_watches=65536</code> — fine for one node; a known problem for multi-node kind</td></tr>
+    <tr><td>Sleep</td><td>68 suspends in 14 days; lid close suspends. Suspends create gaps in Prometheus history</td></tr>
+  </table>
+  <p><b>Main constraint:</b> memory. The cluster budget was set at about 4.5 GiB so the desktop keeps enough headroom.</p>
+
+  <h3>3.2 Tool installation</h3>
+  <p>All three tools were installed into <code>~/.local/bin</code> (no sudo, nothing system-wide), and each download was
+  checked against its published SHA-256 checksum before installation. <code>~/.bashrc</code> line 126 adds the folder to <code>PATH</code>.</p>
+<pre><code>mkdir -p ~/.local/bin
+echo 'export PATH="$HOME/.local/bin:$PATH"' &gt;&gt; ~/.bashrc
+curl -fsSLO https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl
+echo "$(curl -fsSL https://dl.k8s.io/release/v1.37.0/bin/linux/amd64/kubectl.sha256)  kubectl" | sha256sum -c
+curl -fsSLo kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
+curl -fsSL https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64.sha256sum | awk '{print $1"  kind"}' | sha256sum -c
+curl -fsSLO https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
+curl -fsSL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz.sha256sum | sha256sum -c
+tar -xzf helm-v4.3.0-linux-amd64.tar.gz linux-amd64/helm
+install -m 0755 kubectl kind linux-amd64/helm ~/.local/bin/</code></pre>
+  <table>
+    <tr><th>Tool</th><th>Version</th><th>Purpose</th></tr>
+    <tr><td>kubectl</td><td>v1.37.0 (bundles Kustomize v5.8.1)</td><td>Client for the Kubernetes API; every lab uses it</td></tr>
+    <tr><td>kind</td><td>v0.33.0</td><td>Runs a whole Kubernetes cluster inside one Docker container</td></tr>
+    <tr><td>helm</td><td>v4.3.0</td><td>Installs charts; used for kube-prometheus-stack (Helm 4 compatibility confirmed)</td></tr>
+  </table>
+  <p>Removal: <code>rm ~/.local/bin/{kubectl,kind,helm}</code>.</p>
+</section>
+
+<!-- ============================ 4 ============================ -->
+<section class="pb">
+  <h2>4. The kind cluster</h2>
+  <p><b>What kind does.</b> kind ("Kubernetes in Docker") starts a Docker container that behaves like a machine. Inside it
+  run containerd, the kubelet and the control-plane components (API server, etcd, scheduler, controller manager), set up
+  by kubeadm exactly as on a real node. Pods run as containers <i>inside</i> that container.</p>
+<pre><code>kind create cluster --name workload-analyzer --wait 180s
+kubectl cluster-info --context kind-workload-analyzer
+kubectl get nodes -o wide
+kubectl get pods -A</code></pre>
+  <p>kind prefixes the cluster name with <code>kind-</code> to form the kubectl context: cluster <code>workload-analyzer</code> → context
+  <code>kind-workload-analyzer</code>, node container <code>workload-analyzer-control-plane</code>.</p>
+
+  <h3>4.1 What was created</h3>
+  <table>
+    <tr><th>Namespace</th><th>Pods</th><th>Role</th></tr>
+    <tr><td>kube-system</td><td>kube-apiserver, etcd, kube-scheduler, kube-controller-manager, kube-proxy, kindnet (CNI), coredns ×2</td><td>Control plane, networking, DNS</td></tr>
+    <tr><td>local-path-storage</td><td>local-path-provisioner</td><td>Creates PersistentVolumes as folders inside the node (StorageClass <code>standard</code>, default)</td></tr>
+  </table>
+
+  <h3>4.2 Measured footprint <span class="tag m">MEASURED</span></h3>
+  <table>
+    <tr><th>Item</th><th>Value</th><th>Meaning</th></tr>
+    <tr><td>Idle cluster memory</td><td>~550 MiB (547 / 548 / 551)</td><td>Below the 0.6–1.0 GiB estimate made in Phase 0</td></tr>
+    <tr><td>Idle cluster CPU</td><td>21–25% of one core</td><td>Control-plane background work</td></tr>
+    <tr><td>Create time</td><td>2 min 49 s; Ready after 16 s</td><td>Almost all of it was the first pull of the 1.34 GB node image</td></tr>
+    <tr><td>Node allocatable</td><td>12 CPU, 14.79 GiB</td><td>The node believes it owns the whole laptop. Workload memory limits are what protect the desktop.</td></tr>
+    <tr><td>Node container restart policy</td><td><code>on-failure:1</code></td><td>Whether the cluster returns after a reboot is <span class="tag u">UNVERIFIED</span> (Phase 7 test)</td></tr>
+    <tr><td><code>~/.kube/config</code></td><td>mode 600</td><td>Admin credentials, readable only by the owner; outside the repo and in <code>.gitignore</code></td></tr>
+  </table>
+
+  <div class="box warn"><b>Incident: a second cluster.</b> Shortly after creation a second cluster called <code>k8sa</code>
+  appeared (most likely the earlier preview command was run in a terminal). Creating a kind cluster switches kubectl's
+  current context to it, so commands silently went to the new, empty cluster and the <code>learn</code> namespace looked
+  "missing". Nothing was lost. <code>k8sa</code> was deleted with owner approval and the context switched back.
+  <b>Lesson:</b> every command after that used <code>--context kind-workload-analyzer</code> explicitly.</div>
+</section>
+
+<!-- ============================ 5 ============================ -->
+<section class="pb">
+  <h2>5. Lab 01 — Deployment, ReplicaSet, Pod, labels, self-healing, scaling</h2>
+  <p><b>Concept.</b> A <b>Pod</b> is one or more containers scheduled together. A <b>ReplicaSet</b> keeps a fixed number of
+  identical Pods alive. A <b>Deployment</b> manages ReplicaSets so the pod template can be changed safely (rolling updates).
+  <b>Labels</b> are key/value tags; <b>selectors</b> are how controllers and Services find the Pods they own.</p>
+  <p>Manifest <code>learn/01-deployment.yaml</code> (image <code>registry.k8s.io/e2e-test-images/agnhost:2.53</code>, the Kubernetes
+  project's own test image: Alpine-based, has <code>sh</code>/<code>curl</code>, serves HTTP, no Docker Hub rate limits):</p>
+<pre><code>apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: learn, labels: {app: web}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: web}}      # which pods this Deployment owns
+  template:
+    metadata: {labels: {app: web}}         # must match the selector
+    spec:
+      containers:
+      - name: web
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["netexec", "--http-port=8080"]
+        ports: [{containerPort: 8080}]
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {memory: 64Mi}</code></pre>
+  <table>
+    <tr><th>Experiment</th><th>Command</th><th>Observed</th></tr>
+    <tr><td>Apply</td><td><code>kubectl -n learn get deploy,rs,pods --show-labels</code></td><td>Deployment <code>web</code> → ReplicaSet <code>web-5b8dbf6fc9</code> → 2 Pods; ownerReferences confirm the chain</td></tr>
+    <tr><td>Labels</td><td>same</td><td>All carry <code>app=web</code>; RS and Pods also carry <code>pod-template-hash=5b8dbf6fc9</code>, derived from the template</td></tr>
+    <tr><td>Delete a pod</td><td><code>kubectl -n learn delete pod &lt;name&gt;</code></td><td>Replacement Running within ~3 s, new name and new IP</td></tr>
+    <tr><td>Event order</td><td><code>kubectl -n learn get events --sort-by=.lastTimestamp</code></td><td><code>SuccessfulCreate</code> of the replacement appears <i>before</i> <code>Killing</code> of the old pod</td></tr>
+    <tr><td>Scale 2 → 3</td><td><code>kubectl -n learn scale deploy web --replicas=3</code></td><td>Event <code>ScalingReplicaSet … from 2 to 3</code></td></tr>
+    <tr><td>Image pull</td><td>events</td><td>First pull 22 s (54 MB); later pods: "already present on machine"</td></tr>
+  </table>
+  <div class="box key"><b>Why it matters for the analyzer.</b> Pods are disposable: names and IPs change on every
+  replacement, and a terminating pod stops counting toward replicas before it is gone, so pod counts can briefly
+  exceed the replica count. Findings must be keyed by <b>workload</b> (Deployment), never by pod name.</div>
+</section>
+
+<!-- ============================ 6 ============================ -->
+<section class="pb">
+  <h2>6. Lab 02 — Service, EndpointSlice, rolling update, readiness vs liveness</h2>
+  <p><b>Concept.</b> A <b>Service</b> gives a stable virtual IP and DNS name to a changing set of Pods, chosen by label
+  selector; the actual Pod IPs are listed in <b>EndpointSlices</b>. A <b>readiness probe</b> decides whether a Pod receives
+  traffic. A <b>liveness probe</b> decides whether the kubelet restarts the container.</p>
+  <p>Manifest <code>learn/02-service-probes.yaml</code> updates the same Deployment. The probes check marker files so that a
+  single pod can be broken on purpose (real applications would use <code>httpGet</code> on a health endpoint):</p>
+<pre><code>        command: ["/bin/sh", "-c"]
+        args: ["touch /tmp/ready /tmp/alive &amp;&amp; exec /agnhost netexec --http-port=8080"]
+        readinessProbe:                      # failing → removed from Service, NOT restarted
+          exec: {command: ["cat", "/tmp/ready"]}
+          periodSeconds: 5
+          failureThreshold: 1
+        livenessProbe:                       # failing 3× → kubelet restarts the container
+          exec: {command: ["cat", "/tmp/alive"]}
+          periodSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata: {name: web, namespace: learn}
+spec:
+  selector: {app: web}
+  ports: [{port: 80, targetPort: 8080}]</code></pre>
+  <table>
+    <tr><th>Step</th><th>Observed</th></tr>
+    <tr><td>A. Rolling update</td><td>New ReplicaSet <code>web-77765dc8b5</code> 3/3; old one scaled to 0 but kept (rollback possible); <code>rollout history</code> shows revisions 1 and 2</td></tr>
+    <tr><td>B. Service</td><td>ClusterIP <code>10.96.113.85:80</code>; EndpointSlice lists 3 pod IPs on port 8080</td></tr>
+    <tr><td>C. Load balancing</td><td>After the rollout: 9 calls spread 4/3/2 across pods, 0 failures. During the rollout one call returned empty and stalled ~2 min (likely a terminating pod; <span class="tag u">UNVERIFIED</span>) — later calls used <code>--max-time 3</code></td></tr>
+    <tr><td>D. Readiness broken (<code>rm /tmp/ready</code>)</td><td>Pod <code>0/1</code>, <code>ready=false</code> in EndpointSlice, all traffic to the other two (5/4), <b>restart count stays 0</b></td></tr>
+    <tr><td>E. Liveness broken (<code>rm /tmp/alive</code>)</td><td>Restart after 13 s (3 × 5 s). Events: <code>Unhealthy: Liveness probe failed: cat: can't open '/tmp/alive'</code>, then <code>Killing: Container web failed liveness probe, will be restarted</code></td></tr>
+    <tr><td>Termination record</td><td><code>lastState.terminated</code>: <b><code>reason: "Completed"</code>, <code>exitCode: 0</code></b></td></tr>
+  </table>
+  <div class="box key"><b>Key finding: a liveness kill looks like a clean exit.</b> The kubelet sent SIGTERM and the app
+  shut down cleanly, so the recorded reason is <code>Completed</code> with exit code 0. kube-state-metrics reports exactly
+  this reason. Consequences:
+  <ul>
+    <li>R003 (frequent restarts) must count <b>restart increases</b>; it cannot rely on termination reasons.</li>
+    <li>The <b>cause</b> of such a restart exists only in Events — concrete support for D-007.</li>
+    <li>Readiness failures cause no restarts at all; they show up as unavailable replicas.</li>
+  </ul></div>
+</section>
+
+<!-- ============================ 7 ============================ -->
+<section class="pb">
+  <h2>7. Lab 03 — Requests/limits, QoS, OOM, throttling, scheduling</h2>
+  <p><b>Concept.</b> A <b>request</b> is what the scheduler reserves for a container; a <b>limit</b> is the ceiling the kernel
+  enforces. Memory above the limit triggers the kernel OOM killer. CPU above the limit is <b>throttled</b> (paused for the
+  rest of each 100 ms period), never killed. The <b>QoS class</b> is derived from how requests and limits are set and decides
+  eviction order under node memory pressure.</p>
+  <p>Manifest <code>learn/03-resources.yaml</code>: seven standalone pods, all using agnhost's built-in
+  <code>stress</code> (<code>--cpus N</code> whole CPUs, <code>--mem-total</code>) or <code>pause</code>, so no extra image was needed.</p>
+<pre><code># OOM: allocates 200Mi against a 64Mi limit
+    args: ["stress", "--mem-total=200Mi", "--mem-alloc-size=1Mi", "--mem-alloc-sleep=10ms"]
+    resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 64Mi}}
+# Throttling: wants 1 full CPU, limit allows 200m
+    args: ["stress", "--cpus=1"]
+    resources: {requests: {cpu: 100m, memory: 32Mi}, limits: {cpu: 200m, memory: 64Mi}}
+# Pending 1: requests more CPU than the node has
+    resources: {requests: {cpu: "64"}}
+# Pending 2: requires a node label that does not exist
+  nodeSelector: {disktype: ssd}</code></pre>
+  <table>
+    <tr><th>Experiment</th><th>Observed</th><th>Command</th></tr>
+    <tr><td>QoS classes</td><td>BestEffort (no resources); Burstable (request &lt; limit, or request only); Guaranteed (request = limit)</td><td><code>kubectl get pods -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass</code></td></tr>
+    <tr><td>OOM</td><td><code>reason: OOMKilled</code>, <code>exitCode: 137</code>, ~1 s after each start; 3 restarts in 49 s, then <code>BackOff</code></td><td><code>kubectl get pod oom -o jsonpath='{.status.containerStatuses[0].lastState}'</code></td></tr>
+    <tr><td>CPU throttling</td><td><code>cpu.max = 20000 100000</code> (= 200m). <code>nr_throttled == nr_periods</code> (191/191, then 246/246): every period throttled. Usage over 5 s: 1.087 s CPU ≈ 217m</td><td><code>kubectl exec throttled -- cat /sys/fs/cgroup/cpu.stat</code></td></tr>
+    <tr><td>Pending (resources)</td><td><code>FailedScheduling: 0/1 nodes are available: 1 Insufficient cpu. preemption: … not helpful</code></td><td><code>kubectl get events --field-selector reason=FailedScheduling</code></td></tr>
+    <tr><td>Pending (selector)</td><td><code>didn't match Pod's node affinity/selector</code>; scheduled immediately after <code>kubectl label node … disktype=ssd</code></td><td><code>kubectl label node &lt;n&gt; disktype=ssd</code></td></tr>
+    <tr><td>Label removed</td><td>Pod <b>kept running</b>: selectors are only checked at scheduling time</td><td><code>kubectl label node &lt;n&gt; disktype-</code></td></tr>
+    <tr><td>Taint NoSchedule</td><td>New pod Pending (<code>untolerated taint(s)</code>); existing pods unaffected; scheduled after untaint</td><td><code>kubectl taint node &lt;n&gt; lab=only:NoSchedule[-]</code></td></tr>
+    <tr><td>Allocated</td><td>Node requests 1350m CPU (11%) / 546Mi; <b>Pending pods are not counted</b>; CPU limits 250m</td><td><code>kubectl describe node &lt;n&gt;</code></td></tr>
+  </table>
+  <div class="box key"><b>Why it matters for the analyzer.</b>
+  <ul>
+    <li>A real OOM is reliably recorded as <code>OOMKilled</code> / 137 — unlike a liveness kill (<code>Completed</code> / 0). R004's main signal works.</li>
+    <li>The throttling ratio from the kernel's cgroup counters is exactly what the Prometheus metrics expose; 100% throttling means the workload needs more CPU than allowed — R001 must never recommend shrinking it.</li>
+    <li>Scheduling reasons exist only in Events; "requested" totals must exclude Pending pods.</li>
+  </ul></div>
+</section>
+
+<!-- ============================ 8 ============================ -->
+<section class="pb">
+  <h2>8. Lab 04 — ConfigMap, Secret, RBAC</h2>
+  <p><b>Concept.</b> A <b>ConfigMap</b> holds non-secret configuration; a <b>Secret</b> holds sensitive values. Both can be
+  injected as environment variables or mounted as files. <b>RBAC</b> grants verbs (get, list, watch, create, delete …) on
+  resources to identities such as ServiceAccounts, through Roles/ClusterRoles and their bindings.</p>
+  <p>The Secret was created by command so no value ever reached git:</p>
+<pre><code>kubectl -n learn create secret generic web-secret --from-literal=api-token="$(openssl rand -hex 8)"</code></pre>
+  <p>Manifest <code>learn/04-config-secret-rbac.yaml</code> contains a ConfigMap, a pod with three env variables (a literal
+  value on purpose, a ConfigMap reference, a Secret reference) and a mounted ConfigMap, plus the <b>real D-007 RBAC</b>:</p>
+<pre><code>kind: ClusterRole
+metadata: {name: analyzer-readonly}
+rules:
+- apiGroups: [""]
+  resources: [namespaces, nodes, events]
+  verbs: [get, list, watch]
+- apiGroups: ["apps"]
+  resources: [deployments, replicasets, statefulsets, daemonsets]
+  verbs: [get, list, watch]
+- apiGroups: ["autoscaling"]
+  resources: [horizontalpodautoscalers]
+  verbs: [get, list, watch]
+- apiGroups: ["events.k8s.io"]
+  resources: [events]
+  verbs: [get, list, watch]</code></pre>
+  <table>
+    <tr><th>Experiment</th><th>Observed</th></tr>
+    <tr><td>A. Secret storage</td><td><code>Opaque</code>, data in base64. Plain <code>base64 -d</code> recovered the 16-character value, identical to <code>API_TOKEN</code> inside the container (value never printed). <b>Base64 is encoding, not encryption.</b></td></tr>
+    <tr><td>B. Pod spec exposure</td><td><code>LITERAL_PASSWORD=visible-in-pod-spec</code> in plain text; ConfigMap and Secret values appear only as <code>configMapKeyRef</code> / <code>secretKeyRef</code></td></tr>
+    <tr><td>C. ConfigMap update</td><td>Mounted file changed to <code>hello-v2</code> after <b>89 s</b>; env variable stayed <code>hello-v1</code> (fixed at container start)</td></tr>
+    <tr><td>D. <code>auth can-i</code> as the ServiceAccount</td><td>yes: deployments, events, HPAs, nodes. no: pods, secrets, configmaps, delete, create, pods/log</td></tr>
+    <tr><td>E. Real token, isolated kubeconfig</td><td><code>auth whoami</code> → <code>system:serviceaccount:learn:analyzer-readonly</code>. Deployments and Events readable; pods, secrets and delete → <code>Forbidden</code></td></tr>
+  </table>
+<pre><code>TOKEN=$(kubectl -n learn create token analyzer-readonly --duration=10m)
+KUBECONFIG=/dev/null kubectl --server="$S" --token="$TOKEN" --insecure-skip-tls-verify=true auth whoami
+KUBECONFIG=/dev/null kubectl --server="$S" --token="$TOKEN" --insecure-skip-tls-verify=true get pods -n learn
+# Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:learn:analyzer-readonly" cannot list ...</code></pre>
+  <div class="box bad"><b>Testing pitfall found.</b> The first token test wrongly showed pods and secrets as readable.
+  kubectl still loaded the kubeconfig, sent the admin client certificate along with the token, and the API server
+  authenticated the request as admin. Fix: run with <code>KUBECONFIG=/dev/null</code> and assert identity with
+  <code>kubectl auth whoami</code> first. The analyzer's RBAC tests must do the same.</div>
+  <div class="box key"><b>Why it matters.</b> Read access to pods exposes literal env values, which often contain secrets.
+  This is why D-007 grants no <code>pods</code> access. The D-007 ClusterRole was verified exactly as designed.</div>
+</section>
+
+<!-- ============================ 9 ============================ -->
+<section class="pb">
+  <h2>9. metrics-server</h2>
+  <p><b>What it is.</b> metrics-server scrapes the kubelets every 15 s and serves only the <b>latest</b> CPU/memory values
+  through the <code>metrics.k8s.io</code> API. <code>kubectl top</code> and the HPA read it. It stores no history — which is
+  exactly why D-003 chose Prometheus for the analyzer.</p>
+  <p>Installed from the pinned upstream manifest via <code>deploy/metrics-server/kustomization.yaml</code>:</p>
+<pre><code>resources:
+- https://github.com/kubernetes-sigs/metrics-server/releases/download/v0.9.0/components.yaml
+patches:
+- target: {kind: Deployment, name: metrics-server, namespace: kube-system}
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --kubelet-insecure-tls    # kind only: kubelet certs are self-signed</code></pre>
+  <table>
+    <tr><th>Fact</th><th>Value</th></tr>
+    <tr><td>Version / image <span class="tag v">VERIFIED</span></td><td>v0.9.0, <code>registry.k8s.io/metrics-server/metrics-server:v0.9.0</code></td></tr>
+    <tr><td>Permissions</td><td>cluster-wide get/list/watch on pods and nodes; get nodes/metrics; registers the <code>metrics.k8s.io</code> APIService</td></tr>
+    <tr><td>Requests vs use <span class="tag m">MEASURED</span></td><td>requests 100m / 200Mi; uses ~15 Mi</td></tr>
+    <tr><td>Node memory</td><td>669 → 706 MiB (+37 MiB)</td></tr>
+    <tr><td><code>--kubelet-insecure-tls</code></td><td>Acceptable only in a local lab; never on a real cluster</td></tr>
+  </table>
+  <div class="box key"><b>First real over-requested workloads.</b> <code>kubectl top</code> showed the <code>web</code> pods at 5–6m CPU
+  and 6 Mi memory against requests of 50m / 32Mi (≈8× CPU, ≈5× memory), and metrics-server itself at 15 Mi against a
+  200Mi request (≈13×). These are exactly the patterns R001/R002 are meant to find.</div>
+</section>
+
+<!-- ============================ 10 ============================ -->
+<section class="pb">
+  <h2>10. Lab 05 — HPA and the request/utilization coupling</h2>
+  <p><b>Concept.</b> The HorizontalPodAutoscaler computes
+  <code>desiredReplicas = ceil(currentReplicas × currentUtilization / targetUtilization)</code>, with a 10% tolerance and a
+  5-minute scale-down stabilization window by default. For <code>type: Utilization</code> targets, utilization is measured
+  <b>as a percentage of the request</b>. So changing a request changes utilization — and the replica count.
+  <span class="tag v">VERIFIED</span> (kubernetes.io)</p>
+  <p>Manifest <code>learn/05-hpa.yaml</code>: Deployment <code>hpa-demo</code> using
+  <code>registry.k8s.io/e2e-test-images/resource-consumer:1.15.0</code> (the image Kubernetes' own HPA tests use), a Service,
+  an HPA (min 1, max 5, target 70% CPU), and a load pod that sends 3 × <code>POST /ConsumeCPU?millicores=100&amp;durationSec=30</code>
+  every 30 s through the Service — about 300m total, <b>shared</b> across replicas like real traffic.</p>
+  <table>
+    <tr><th>Phase</th><th>Request</th><th>Measured</th><th>HPA result</th></tr>
+    <tr><td>Start</td><td>400m</td><td>First ~45 s: <code>no metrics returned</code> / <code>pods might be unready</code></td><td>no action (new pod has no data)</td></tr>
+    <tr><td>A. Baseline</td><td>400m</td><td>302m used → <b>75%</b></td><td>stays at <b>1</b> (75/70 = 1.07, within tolerance)</td></tr>
+    <tr><td>B. "Rightsize"</td><td>200m</td><td>300m → <b>150%</b></td><td><code>SuccessfulRescale: New size: 3</code> = ceil(1 × 150/70) = ceil(2.14)</td></tr>
+    <tr><td>After scale-out</td><td>200m</td><td>40–62% (80–125m per pod)</td><td>stays at 3 (scale-down would need &lt; ~47% sustained for 5 min)</td></tr>
+  </table>
+  <table>
+    <tr><th></th><th>Before (400m × 1)</th><th>After (200m × 3)</th></tr>
+    <tr><td>Total CPU requested</td><td>400m</td><td><b>600m (+50%)</b></td></tr>
+    <tr><td>Total memory requested</td><td>64Mi</td><td><b>192Mi (3×)</b></td></tr>
+    <tr><td>Pods</td><td>1</td><td>3</td></tr>
+  </table>
+  <div class="box key"><b>Key finding.</b> Cutting the per-pod request on an HPA-managed workload <b>increased</b> total
+  allocation. R001 must therefore emit an "HPA-coupled" caveat plus the <b>HPA-neutral request</b>
+  (usage ÷ target = 300m ÷ 0.7 ≈ 430m), never a plain resize. A snapshot showed per-pod usage 190m / 0m / 1m: with few
+  requests, random Service routing leaves some pods idle — use workload-level aggregates for HPA-managed workloads.</div>
+  <p class="small muted">Note: the pre-run prediction was "2 replicas". That was an arithmetic error (150/70 = 2.14 → 3); the HPA followed its formula exactly.</p>
+</section>
+
+<!-- ============================ 11 ============================ -->
+<section class="pb">
+  <h2>11. The monitoring stack</h2>
+  <h3>11.1 Architecture</h3>
+<pre><code> kind node ──────────────────────────────────────────────────────────────────
+   kubelet (/metrics, /metrics/cadvisor) ─┐
+   kube-state-metrics (object state) ─────┼──► Prometheus (PVC 8Gi, 7d / 5GB) ──► Grafana
+   node-exporter (node OS metrics) ───────┘          ▲
+   prometheus-operator (manages Prometheus from ServiceMonitors / CRDs)
+ ──────────────────────────────────────────────────────────────────────────────</code></pre>
+  <table>
+    <tr><th>Component</th><th>Provides</th></tr>
+    <tr><td>cAdvisor (inside the kubelet)</td><td>Container usage: CPU seconds, memory working set, CPU throttling counters</td></tr>
+    <tr><td>kube-state-metrics (KSM)</td><td>Object state from the API: requests/limits, restarts, termination/waiting reasons, phases, owners, deployments, HPAs, node conditions</td></tr>
+    <tr><td>node-exporter</td><td>Node-level OS metrics (memory available, OOM-kill counter)</td></tr>
+    <tr><td>Prometheus operator</td><td>Turns ServiceMonitor objects into Prometheus scrape configuration</td></tr>
+    <tr><td>Grafana</td><td>Dashboards for raw time-series investigation (not the analyzer UI)</td></tr>
+  </table>
+
+  <h3>11.2 Values file — every setting explained</h3>
+  <p><code>deploy/prometheus/values.yaml</code> for kube-prometheus-stack <b>91.5.0</b>:</p>
+  <table>
+    <tr><th>Setting</th><th>Why</th></tr>
+    <tr><td><code>alertmanager.enabled: false</code></td><td>No alert routing in the MVP; saves memory</td></tr>
+    <tr><td><code>kubeEtcd / kubeScheduler / kubeControllerManager / kubeProxy / kubeApiServer: enabled: false</code></td><td>Control-plane targets are not needed for workload analysis and produce many series</td></tr>
+    <tr><td><code>grafana.admin.existingSecret: grafana-admin</code></td><td>Password comes from a Secret created with <code>openssl rand</code>; never in values or git; stable across <code>helm upgrade</code></td></tr>
+    <tr><td><code>grafana.resources</code> (128Mi request, 384Mi limit)</td><td>Bound Grafana's memory</td></tr>
+    <tr><td><code>kube-state-metrics.collectors</code> (explicit list without <code>secrets</code>, <code>configmaps</code>)</td><td>The defaults include both, and the chart's RBAC grants list/watch on them — which returns Secret <b>values</b>. The RBAC template follows this list, so the permissions disappear too. <span class="tag v">VERIFIED</span> in the chart's <code>role.yaml</code></td></tr>
+    <tr><td><code>retention: 7d</code>, <code>retentionSize: 5GB</code></td><td>7 days is what HIGH confidence needs; size cap stays under the PVC</td></tr>
+    <tr><td>Prometheus requests 200m / 512Mi, limit 1Gi</td><td>Protects the laptop; Prometheus is the component most likely to grow</td></tr>
+    <tr><td><code>storageSpec.volumeClaimTemplate</code> 8Gi</td><td>The default is emptyDir: history would be lost on every pod restart</td></tr>
+  </table>
+
+  <h3>11.3 Installation</h3>
+<pre><code>kubectl create namespace monitoring
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
+  -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m</code></pre>
+  <p>Install took 4 min 32 s. <code>helm --wait</code> returned before the Prometheus pod itself was Ready (that pod is
+  created by the operator, not by Helm); it became Ready about 4.5 minutes after starting. The chart printed a note
+  about a <code>kps-grafana</code> secret, but no such secret was created: Grafana's env variables reference
+  <code>grafana-admin</code>. <span class="tag m">MEASURED</span></p>
+
+  <h3>11.4 Measured footprint <span class="tag m">MEASURED</span></h3>
+  <table>
+    <tr><th>Item</th><th>Value</th></tr>
+    <tr><td>Grafana pod</td><td>~400 MiB: grafana 246 + dashboard sidecar 73 + datasource sidecar 72</td></tr>
+    <tr><td>Prometheus</td><td>85 MiB at start → 126 MiB after ~20 min → 144 MiB after ~50 min (+10 MiB config-reloader); limit 1Gi</td></tr>
+    <tr><td>Operator / KSM / node-exporter</td><td>~28 / ~20 / ~11 MiB</td></tr>
+    <tr><td>Monitoring pods total</td><td>~580 MiB</td></tr>
+    <tr><td>Node container (<code>docker stats</code>)</td><td>~770 MiB → ~2.2 GiB; includes reclaimable file cache from image pulls, so it overstates the real cost</td></tr>
+    <tr><td>Host available memory</td><td>7098 → 6274 MiB (−824 MiB; desktop apps also changed)</td></tr>
+    <tr><td>Active series / ingestion</td><td>13.7k → 15.5k series; ~600 samples/s (far below the ~100k-series estimate from Phase 0)</td></tr>
+    <tr><td>Disk</td><td>2.8 MB after ~20 min, 12 MB after ~50 min. Projection: ~80 MB/day, ~0.6 GB for 7 days <span class="tag e">ESTIMATED</span></td></tr>
+  </table>
+</section>
+
+<!-- ============================ 12 ============================ -->
+<section class="pb">
+  <h2>12. Lab 06 — Verifying every metric</h2>
+  <p>Queries were sent through the API server's service proxy, so no port-forward had to stay open:</p>
+<pre><code>P=/api/v1/namespaces/monitoring/services/kps-kube-prometheus-stack-prometheus:9090/proxy/api/v1
+kubectl get --raw "$P/query?query=&lt;url-encoded PromQL&gt;"</code></pre>
+  <p>The first pass found six metrics <b>absent</b>. They were not broken: kube-state-metrics and cAdvisor only emit them
+  while the condition exists. The conditions were triggered for ~4 minutes by re-applying the Lab 03 pods and the
+  Lab 05 HPA (without load), then queried again.</p>
+  <table>
+    <tr><th>Metric</th><th>Source</th><th>Result</th></tr>
+    <tr><td><code>container_cpu_usage_seconds_total</code>, <code>container_memory_working_set_bytes</code></td><td>cAdvisor</td><td>present (57 series); throttled pod 172m vs 200m limit</td></tr>
+    <tr><td><code>container_cpu_cfs_throttled_periods_total</code> / <code>_cfs_periods_total</code></td><td>cAdvisor</td><td>only for CPU-limited containers; ratio = 1.0 (100%). Extra pod-level series with empty <code>container</code> label</td></tr>
+    <tr><td><code>container_cpu_cfs_throttled_seconds_total</code></td><td>cAdvisor</td><td>absent — dropped by the chart's relabelling (expected)</td></tr>
+    <tr><td><code>kube_pod_container_status_restarts_total</code></td><td>KSM</td><td>OOM pod: 5</td></tr>
+    <tr><td><code>kube_pod_container_status_last_terminated_reason</code></td><td>KSM</td><td><code>oom → OOMKilled</code>; <code>web-…-fx9dw → Completed</code> (the Lab 02 liveness kill)</td></tr>
+    <tr><td><code>container_oom_events_total</code></td><td>cAdvisor</td><td><b>0 through 5 real OOMs → not usable</b></td></tr>
+    <tr><td><code>node_vmstat_oom_kill</code></td><td>node-exporter</td><td>increases, but node-wide — cannot be attributed to a container</td></tr>
+    <tr><td><code>kube_pod_container_status_waiting_reason</code></td><td>KSM</td><td><code>CrashLoopBackOff</code> — only visible with <code>max_over_time(…[6m])</code>; an instant query missed it between restarts</td></tr>
+    <tr><td><code>kube_pod_status_unschedulable</code></td><td>KSM</td><td><code>pending-cpu</code>, <code>pending-selector</code> = 1</td></tr>
+    <tr><td><code>kube_pod_owner</code>, <code>kube_replicaset_owner</code>, <code>kube_pod_info</code></td><td>KSM</td><td>present (18 / 8 / 18)</td></tr>
+    <tr><td><code>kube_pod_container_resource_requests</code> / <code>_limits</code></td><td>KSM</td><td>present (23 / 7)</td></tr>
+    <tr><td><code>kube_deployment_spec_replicas</code> / <code>_status_replicas_available</code></td><td>KSM</td><td>present (7 / 7)</td></tr>
+    <tr><td><code>kube_node_status_condition</code> / <code>_allocatable</code></td><td>KSM</td><td>present (12 / 6)</td></tr>
+    <tr><td><code>kube_horizontalpodautoscaler_info</code> / <code>_spec_target_metric</code></td><td>KSM</td><td><code>hpa-demo → Deployment/hpa-demo</code>; <code>cpu Utilization 70</code></td></tr>
+  </table>
+  <div class="box key"><b>Three rules for writing queries, learned here.</b>
+  <ol>
+    <li><b>Absent series ≠ missing data.</b> For state metrics (waiting reason, unschedulable, HPA, throttling) no series
+    means "condition not present". For usage metrics, no series means missing data → R005 <code>insufficient</code>.</li>
+    <li><b>Filter <code>container!=""</code></b>: cAdvisor adds a pod-level series next to each container series.</li>
+    <li><b>Use range queries for short states</b> (<code>max_over_time</code>): an instant query can fall between restarts.</li>
+  </ol></div>
+</section>
+
+<!-- ============================ 13 ============================ -->
+<section class="pb">
+  <h2>13. Security verification</h2>
+  <table>
+    <tr><th>Check</th><th>Command</th><th>Result</th></tr>
+    <tr><td>KSM can list/watch secrets</td><td><code>kubectl auth can-i list secrets -A --as=system:serviceaccount:monitoring:kps-kube-state-metrics</code></td><td><b>no</b> (watch: no; configmaps: no; pods: yes, needed)</td></tr>
+    <tr><td>KSM ClusterRole rules</td><td><code>kubectl get clusterrole kps-kube-state-metrics -o yaml</code></td><td>no secrets/configmaps entries</td></tr>
+    <tr><td>Secret/ConfigMap metrics</td><td><code>count({__name__=~"kube_(secret|configmap)_.*"})</code></td><td>0 series</td></tr>
+    <tr><td>Grafana anonymous</td><td><code>curl localhost:3300/api/user</code> (temporary port-forward)</td><td><b>401</b></td></tr>
+    <tr><td>Grafana wrong password</td><td><code>curl -u admin:wrong …</code></td><td><b>401</b></td></tr>
+    <tr><td>Grafana admin</td><td><code>curl -u "admin:$PW" …</code></td><td><code>{"login":"admin","isGrafanaAdmin":true}</code></td></tr>
+    <tr><td>Grafana image</td><td><code>kubectl exec … -- sh</code></td><td>no shell (minimal image) — good</td></tr>
+    <tr><td>Exposure</td><td><code>kubectl -n monitoring get svc</code></td><td>all Services ClusterIP; reached only via port-forward</td></tr>
+    <tr><td>Analyzer RBAC (Lab 04)</td><td>real token, <code>KUBECONFIG=/dev/null</code></td><td>pods, secrets, delete → Forbidden</td></tr>
+  </table>
+  <p><b>Components that can still read pod specs:</b> kube-state-metrics (needs pods for pod metrics) and metrics-server.
+  Both are upstream system components and trusted in the lab. The analyzer itself has no <code>pods</code> access (D-007).
+  Recorded in <code>docs/threat-model.md</code>.</p>
+</section>
+
+<!-- ============================ 14 ============================ -->
+<section class="pb">
+  <h2>14. What Phase 1 changed in the analyzer design</h2>
+  <table>
+    <tr><th>Evidence</th><th>Design consequence</th></tr>
+    <tr><td>Liveness kill → <code>Completed</code>/0 (Lab 02)</td><td>R003 counts restart increases, not termination reasons; restart <i>causes</i> come from Events</td></tr>
+    <tr><td>OOM → <code>OOMKilled</code>/137 (Lab 03, Lab 06)</td><td>R004 = KSM <code>last_terminated_reason="OOMKilled"</code> + restart increase</td></tr>
+    <tr><td><code>container_oom_events_total</code> stays 0 (Lab 06)</td><td>Removed from the measurement model</td></tr>
+    <tr><td>100% throttling at the limit (Lab 03)</td><td>R001's "throttled ratio &lt; 5%" gate is essential</td></tr>
+    <tr><td>HPA 1 → 3, CPU +50%, memory 3× (Lab 05)</td><td>R001 emits "HPA-coupled" + HPA-neutral request (usage ÷ target) for Utilization-type HPAs</td></tr>
+    <tr><td>Uneven per-pod load under an HPA (Lab 05)</td><td>Use workload-level aggregates, not single pods</td></tr>
+    <tr><td>New pod has no metrics for ~45 s (Lab 05)</td><td>R005 handles new workloads explicitly</td></tr>
+    <tr><td>Absent state series (Lab 06)</td><td>"No series" semantics differ between state and usage metrics</td></tr>
+    <tr><td>Scheduling and probe reasons only in Events (Labs 02–03)</td><td>Supports D-007 (Events read access)</td></tr>
+    <tr><td>Pod names/IPs change on replacement (Lab 01)</td><td>Findings keyed by workload; stable IDs from cluster + rule + namespace + workload + container</td></tr>
+    <tr><td>kubeconfig credentials override <code>--token</code> (Lab 04)</td><td>RBAC tests run with an isolated kubeconfig and assert <code>auth whoami</code></td></tr>
+    <tr><td>Node allocatable = whole laptop (§4)</td><td>Demo workloads always carry memory limits</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 15 ============================ -->
+<section>
+  <h2>15. Mistakes and corrections</h2>
+  <p>Recorded so the same traps are not repeated.</p>
+  <table>
+    <tr><th>What went wrong</th><th>Effect</th><th>Correction</th></tr>
+    <tr><td>Second cluster <code>k8sa</code> switched the kubectl context</td><td>Commands hit an empty cluster</td><td>Deleted <code>k8sa</code>; <code>--context</code> on every command</td></tr>
+    <tr><td>Token test with kubeconfig loaded</td><td>False "access granted" for pods/secrets</td><td><code>KUBECONFIG=/dev/null</code> + <code>auth whoami</code></td></tr>
+    <tr><td><code>curl</code> without timeout during a rollout</td><td>One call stalled ~2 min</td><td><code>--max-time 3</code></td></tr>
+    <tr><td>HPA output parsed with <code>awk</code></td><td>"replicas=5" was really MAXPODS (column shift)</td><td>Read <code>.status</code> fields with jsonpath</td></tr>
+    <tr><td>HPA prediction arithmetic</td><td>Predicted 2 replicas; actual 3</td><td>ceil(2.14) = 3; noted in lab notes</td></tr>
+    <tr><td><code>gh pr edit</code> on gh 2.46</td><td>Fails on a retired GitHub API</td><td>Use <code>gh api -X PATCH repos/…/pulls/N</code></td></tr>
+    <tr><td>PR #1 already merged by the owner; merge call was a no-op; its description then edited</td><td>3 commits missing from main; PR #1 described content it did not contain</td><td>PR #1 description restored; PR #2 opened and merged</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 16 ============================ -->
+<section class="pb">
+  <h2>16. Git and GitHub workflow</h2>
+  <table>
+    <tr><th>Commit</th><th>Content</th></tr>
+    <tr><td><code>878dc6e</code></td><td>Phase 0 foundation and accepted decisions (on main)</td></tr>
+    <tr><td><code>d82608c</code></td><td>Cluster footprint and labs 01–03</td></tr>
+    <tr><td><code>b2d1976</code></td><td>Lab 04 ConfigMap, Secret, read-only RBAC</td></tr>
+    <tr><td><code>6ea7ca8</code></td><td>Merge of PR #1 (merged by the owner on GitHub)</td></tr>
+    <tr><td><code>0b89a43</code></td><td>metrics-server v0.9.0</td></tr>
+    <tr><td><code>2638d88</code></td><td>Lab 05 HPA</td></tr>
+    <tr><td><code>b30df45</code></td><td>Trimmed kube-prometheus-stack and verified measurement model; Phase 1 DONE</td></tr>
+    <tr><td><code>63454cc</code></td><td>Merge of PR #2 — current <code>main</code></td></tr>
+  </table>
+  <p>Conventions: work on a branch (<code>phase-1</code>), stage files by name (never <code>git add -A</code>), review
+  <code>git diff --cached</code> for secrets before each commit, Conventional-Commit style messages, no AI co-author trailer,
+  merge through a pull request with a merge commit.</p>
+<pre><code>git switch -c phase-1
+git add &lt;files&gt; &amp;&amp; git diff --cached --stat
+git commit -m "docs(phase-1): …"
+git push -u origin phase-1
+gh pr create --draft --base main --head phase-1 --title "…" --body-file body.md
+gh api -X PATCH repos/ISHANT57/kubernetes-workload-analyzer/pulls/1 -F "body=@body.md"
+gh api -X PUT repos/ISHANT57/kubernetes-workload-analyzer/pulls/2/merge -f merge_method=merge
+git switch main &amp;&amp; git pull --ff-only</code></pre>
+</section>
+
+<!-- ============================ 17 ============================ -->
+<section>
+  <h2>17. Current state, operating and rollback</h2>
+  <h3>17.1 State at 2026-09-25 00:33 <span class="tag m">MEASURED</span></h3>
+  <table>
+    <tr><th>Namespace</th><th>Running</th></tr>
+    <tr><td>kube-system</td><td>9 pods (control plane, CoreDNS, kindnet, kube-proxy, metrics-server)</td></tr>
+    <tr><td>local-path-storage</td><td>1 pod</td></tr>
+    <tr><td>learn</td><td>3 <code>web</code> pods + Service <code>web</code></td></tr>
+    <tr><td>monitoring</td><td>5 pods (Grafana 402 Mi, Prometheus 144 Mi, operator, KSM, node-exporter); PVC 12 MB; ~49 min of history; 15.5k series</td></tr>
+  </table>
+  <h3>17.2 Operating</h3>
+<pre><code>kubectl config use-context kind-workload-analyzer        # make sure commands hit this cluster
+kubectl -n monitoring port-forward svc/kps-grafana 3000:80
+kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
+kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090
+docker stop workload-analyzer-control-plane               # pause the cluster (recovery UNVERIFIED)
+docker start workload-analyzer-control-plane</code></pre>
+  <p>Keep the laptop on AC power while collecting history: on battery it suspends, which creates gaps.</p>
+  <h3>17.3 Rollback / removal</h3>
+<pre><code>kubectl delete namespace learn
+helm uninstall kps -n monitoring &amp;&amp; kubectl delete namespace monitoring
+kubectl get crd -o name | grep monitoring.coreos.com | xargs kubectl delete
+kubectl delete -k deploy/metrics-server
+kind delete cluster --name workload-analyzer             # removes everything, including Prometheus history
+rm ~/.local/bin/{kubectl,kind,helm}</code></pre>
+</section>
+
+<!-- ============================ 18 ============================ -->
+<section class="pb">
+  <h2>18. Open items and next phase</h2>
+  <table>
+    <tr><th>Item</th><th>Status</th></tr>
+    <tr><td>ADRs for accepted decisions (D-001, 002, 003, 005, 006, 007) with Phase 1 evidence</td><td>Due now ("after Phase 1")</td></tr>
+    <tr><td>D-004 (no application database)</td><td>Still PROPOSED</td></tr>
+    <tr><td>Cluster recovery after Docker restart / reboot</td><td>Phase 7 test</td></tr>
+    <tr><td>Grafana sidecars (~145 MiB, no limits)</td><td>Possible trim later</td></tr>
+    <tr><td><code>phase-1</code> branch</td><td>Fully merged; can be deleted</td></tr>
+    <tr><td>Phase 2 — demo workloads</td><td>Next: <code>demo/</code> namespace with 8–9 deterministic workloads, each mapped to an expected finding in <code>demo/expected-findings.yaml</code>; images pinned by digest</td></tr>
+  </table>
+  <p>Phase 1 also showed which images to use in Phase 2: agnhost (<code>stress</code>, <code>pause</code>, <code>netexec</code>) covers CPU,
+  memory, OOM and crash cases without Docker Hub, and resource-consumer gives shared, realistic load for the HPA workload.</p>
+</section>
+
+<!-- ============================ APPENDIX A ============================ -->
+<section class="pb">
+  <h2>Appendix A — Command cheat sheet</h2>
+  <table class="small">
+    <tr><th>Task</th><th>Command</th></tr>
+    <tr><td>Everything in a namespace</td><td><code>kubectl -n learn get deploy,rs,pods,svc --show-labels</code></td></tr>
+    <tr><td>Why is a pod unhappy</td><td><code>kubectl -n learn describe pod &lt;p&gt;</code></td></tr>
+    <tr><td>Recent events</td><td><code>kubectl -n learn get events --sort-by=.lastTimestamp | tail -20</code></td></tr>
+    <tr><td>Last termination</td><td><code>kubectl get pod &lt;p&gt; -o jsonpath='{.status.containerStatuses[0].lastState}'</code></td></tr>
+    <tr><td>QoS class</td><td><code>kubectl get pods -o custom-columns=NAME:.metadata.name,QOS:.status.qosClass</code></td></tr>
+    <tr><td>Scheduling failures</td><td><code>kubectl get events -A --field-selector reason=FailedScheduling</code></td></tr>
+    <tr><td>Node reservations</td><td><code>kubectl describe node workload-analyzer-control-plane | sed -n '/Allocated resources/,/Events/p'</code></td></tr>
+    <tr><td>Current usage</td><td><code>kubectl top nodes</code>; <code>kubectl top pods -A --containers</code></td></tr>
+    <tr><td>cgroup throttling</td><td><code>kubectl exec &lt;p&gt; -- cat /sys/fs/cgroup/cpu.stat</code></td></tr>
+    <tr><td>Rollout</td><td><code>kubectl rollout status|history|undo deploy/&lt;d&gt;</code></td></tr>
+    <tr><td>Service endpoints</td><td><code>kubectl get endpointslices -l kubernetes.io/service-name=&lt;svc&gt; -o wide</code></td></tr>
+    <tr><td>HPA status</td><td><code>kubectl get hpa &lt;h&gt; -o jsonpath='{.status}'</code>; <code>kubectl describe hpa &lt;h&gt;</code></td></tr>
+    <tr><td>RBAC check</td><td><code>kubectl auth can-i &lt;verb&gt; &lt;resource&gt; --as=system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code></td></tr>
+    <tr><td>Who am I</td><td><code>kubectl auth whoami</code></td></tr>
+    <tr><td>Node label / taint</td><td><code>kubectl label node &lt;n&gt; k=v</code> / <code>k-</code>; <code>kubectl taint node &lt;n&gt; k=v:NoSchedule</code> / <code>…-</code></td></tr>
+    <tr><td>PromQL via API proxy</td><td><code>kubectl get --raw "/api/v1/namespaces/monitoring/services/kps-kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?query=up"</code></td></tr>
+    <tr><td>CPU usage (PromQL)</td><td><code>rate(container_cpu_usage_seconds_total{container!=""}[5m])</code></td></tr>
+    <tr><td>Throttling ratio</td><td><code>rate(container_cpu_cfs_throttled_periods_total{container!=""}[5m]) / rate(container_cpu_cfs_periods_total{container!=""}[5m])</code></td></tr>
+    <tr><td>Memory peak</td><td><code>max_over_time(container_memory_working_set_bytes{container!=""}[24h])</code></td></tr>
+    <tr><td>OOM in window</td><td><code>increase(kube_pod_container_status_restarts_total[1h]) &gt; 0 and on(namespace,pod,container) kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1</code></td></tr>
+    <tr><td>Crash loop in window</td><td><code>max_over_time(kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}[10m]) == 1</code></td></tr>
+    <tr><td>Series count</td><td><code>prometheus_tsdb_head_series</code></td></tr>
+  </table>
+</section>
+
+<!-- ============================ APPENDIX B ============================ -->
+<section class="pb">
+  <h2>Appendix B — Glossary</h2>
+  <table class="small">
+    <tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>cAdvisor</td><td>Container-usage collector built into the kubelet; source of <code>container_*</code> metrics</td></tr>
+    <tr><td>cgroup v2</td><td>Linux kernel mechanism that enforces CPU/memory limits and counts usage and throttling</td></tr>
+    <tr><td>ClusterRole / Role</td><td>A set of permissions; ClusterRole is cluster-wide (needed for nodes), Role is per namespace</td></tr>
+    <tr><td>Context (kubectl)</td><td>Named cluster + user + namespace in kubeconfig; decides where commands go</td></tr>
+    <tr><td>CrashLoopBackOff</td><td>Container keeps exiting; the kubelet waits longer between restarts (up to 5 min)</td></tr>
+    <tr><td>EndpointSlice</td><td>List of ready Pod IPs behind a Service</td></tr>
+    <tr><td>Event</td><td>API object recording what happened to an object; expires after ~1 hour by default</td></tr>
+    <tr><td>HPA</td><td>HorizontalPodAutoscaler: changes the replica count from a metric; Utilization targets are relative to requests</td></tr>
+    <tr><td>kube-state-metrics (KSM)</td><td>Exports the state of API objects as Prometheus metrics</td></tr>
+    <tr><td>Liveness / readiness probe</td><td>Restart-if-failing check / receive-traffic-only-if-passing check</td></tr>
+    <tr><td>OOMKilled (exit 137)</td><td>Container killed by the kernel for exceeding its memory limit</td></tr>
+    <tr><td>PVC</td><td>PersistentVolumeClaim: request for storage that survives pod restarts</td></tr>
+    <tr><td>QoS class</td><td>BestEffort / Burstable / Guaranteed, from requests and limits; decides eviction order</td></tr>
+    <tr><td>Request / limit</td><td>Scheduler reservation / kernel-enforced ceiling</td></tr>
+    <tr><td>Series</td><td>One metric name + one unique label set in Prometheus; the main driver of Prometheus memory</td></tr>
+    <tr><td>ServiceMonitor</td><td>Operator object telling Prometheus what to scrape</td></tr>
+    <tr><td>Taint / toleration</td><td>Node-side "keep away" mark / pod-side permission to ignore it</td></tr>
+    <tr><td>Throttling</td><td>CPU paused for the rest of a 100 ms period after using its limit</td></tr>
+  </table>
+</section>
+
+</body>
+</html>

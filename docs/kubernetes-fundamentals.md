@@ -50,3 +50,18 @@ Manifest: `learn/03-resources.yaml` (agnhost `stress` / `pause`; no extra image)
 Relevance to the analyzer: OOM is reliably `OOMKilled` (exit 137), unlike liveness kills (`Completed`,
 exit 0); throttling ratio from cgroup counters matches the Prometheus metrics R001 will use;
 scheduling reasons exist only in Events; requested totals exclude Pending pods.
+
+## 04 — ConfigMap, Secret, RBAC (2026-09-24)
+Manifest: `learn/04-config-secret-rbac.yaml`; Secret created by command (never committed).
+
+| Experiment | Observation | Command |
+|---|---|---|
+| Secret storage | `Opaque`, data base64-encoded; `base64 -d` recovers it — encoding, not encryption | `kubectl -n learn get secret web-secret -o jsonpath='{.data}'` |
+| Pod spec exposure | Literal env value visible in plain text; ConfigMap/Secret values only as references | `kubectl -n learn get pod config-demo -o yaml` |
+| ConfigMap update | Mounted file updated after 89 s; env var unchanged until restart | `kubectl -n learn patch configmap web-config ...` |
+| RBAC (can-i) | analyzer-readonly: deployments/events/HPAs/nodes yes; pods/secrets/configmaps/delete/create/pods/log no | `kubectl auth can-i <verb> <res> --as=system:serviceaccount:learn:analyzer-readonly` |
+| RBAC (real token) | With `KUBECONFIG=/dev/null`: deployments/events allowed; pods, secrets, delete → Forbidden | `kubectl create token analyzer-readonly --duration=10m` |
+| Test pitfall | With kubeconfig loaded, the admin client cert was used despite `--token` → false "access granted" | `kubectl auth whoami` first |
+
+Relevance to the analyzer: D-007 ClusterRole verified; RBAC tests must run with an isolated
+kubeconfig and assert identity with `kubectl auth whoami`.

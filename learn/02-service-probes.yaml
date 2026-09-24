@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: learn, labels: {app: web}}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      containers:
+      - name: web
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        # Lab trick: probes check marker files so we can break ONE pod on purpose.
+        # Real apps would use httpGet on a health endpoint.
+        command: ["/bin/sh", "-c"]
+        args: ["touch /tmp/ready /tmp/alive && exec /agnhost netexec --http-port=8080"]
+        ports: [{containerPort: 8080}]
+        readinessProbe:                      # failing → removed from Service, NOT restarted
+          exec: {command: ["cat", "/tmp/ready"]}
+          periodSeconds: 5
+          failureThreshold: 1
+        livenessProbe:                       # failing 3× → kubelet restarts the container
+          exec: {command: ["cat", "/tmp/alive"]}
+          periodSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {memory: 64Mi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: web, namespace: learn}
+spec:
+  selector: {app: web}                       # Service finds pods by label, not by name
+  ports: [{port: 80, targetPort: 8080}]

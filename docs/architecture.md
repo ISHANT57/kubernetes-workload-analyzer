@@ -18,6 +18,20 @@
 Budget: about **4.5 GiB** is realistic for the whole cluster while the desktop stays in use; the
 monitoring stack footprint is still an ESTIMATE until Phase 1 measures it.
 
+### Measured cluster footprint (2026-09-24)
+
+| Item | Value | Label |
+|---|---|---|
+| Cluster | kind v0.33.0, single node `workload-analyzer`, Kubernetes v1.37.0, containerd 2.3.4 | MEASURED |
+| Idle cluster memory (node container, all 9 system pods Running) | ~550 MiB (547 / 548 / 551 MiB samples) | MEASURED |
+| Idle cluster CPU | 21–25% of one core | MEASURED |
+| Host available memory before → after | 9951 → ~9400 MiB | MEASURED |
+| Create time | 2 min 49 s total; control plane Ready after 16 s (rest = first image pull) | MEASURED |
+| Node image | `kindest/node:v1.37.0`, 1.34 GB on disk | MEASURED |
+| Node allocatable | 12 CPU, 14.79 GiB (the whole laptop; workload memory limits protect the desktop) | MEASURED |
+| Storage | `standard` StorageClass (local-path), default, `WaitForFirstConsumer` | MEASURED |
+| Node container restart policy | `on-failure:1`; survival across host reboot UNVERIFIED (Phase 6 test) | MEASURED |
+
 ## Shape: modular monolith
 
 ```

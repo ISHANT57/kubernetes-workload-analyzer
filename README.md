@@ -1,8 +1,9 @@
 # Kubernetes Workload Analyzer
 
-> **Status:** Phases 0–7 done: foundation through a hardened, in-cluster-deployed backend with a
-> working React dashboard, Grafana links, and verified read-only RBAC — end-to-end, live against
-> a real cluster. Phase 8 (final demo write-up) next. See [PHASES.md](PHASES.md).
+> **Status:** Phases 0–8 done: foundation through a hardened, in-cluster-deployed backend with a
+> working React dashboard, Grafana links, verified read-only RBAC, and a scripted demo runbook —
+> end-to-end, live against a real cluster. See [PHASES.md](PHASES.md) and
+> [docs/runbook.md](docs/runbook.md).
 
 A portfolio project that observes a Kubernetes cluster, analyzes real workload, resource and
 reliability metrics, and turns them into **evidence-based findings** shown in a custom dashboard.
@@ -112,5 +113,6 @@ Phase write-ups (PDF): [docs/reports/](docs/reports/).
 - [docs/DECISIONS.md](docs/DECISIONS.md) — decisions and their status, linking to [docs/decisions/](docs/decisions/) ADRs
 - [docs/threat-model.md](docs/threat-model.md) — threats and permissions
 - [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamentals.md) — hands-on lab notes (Phase 1)
+- [docs/runbook.md](docs/runbook.md) — scripted demo, one section per success criterion (Phase 8)
 - [backend/README.md](backend/README.md) — running and testing the Go backend (Phase 3)
 - [docs/reports/](docs/reports/) — per-phase PDF write-ups

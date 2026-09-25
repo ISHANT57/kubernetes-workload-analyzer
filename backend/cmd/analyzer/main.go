@@ -63,8 +63,9 @@ func main() {
 		logger.Info("cost estimation disabled", "reason", pricingErr)
 	}
 
+	evidenceBuilder := &evidence.Builder{Prom: promClient}
 	analyzer := &findings.Analyzer{
-		Builder: &evidence.Builder{Prom: promClient},
+		Builder: evidenceBuilder,
 		Pricing: pricing,
 		Logger:  logger,
 	}
@@ -88,7 +89,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           httpserver.New(analysisRunner, logger),
+		Handler:           httpserver.New(analysisRunner, evidenceBuilder, cfg.StaticDir, logger),
 		ReadHeaderTimeout: 5 * time.Second, // never accept a client that trickles headers forever
 	}
 

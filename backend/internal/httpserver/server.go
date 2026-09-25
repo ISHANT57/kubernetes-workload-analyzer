@@ -4,12 +4,17 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/evidence"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
 )
 
@@ -21,23 +26,56 @@ type LatestProvider interface {
 	Findings() []model.Finding
 }
 
+// TimeSeriesProvider is implemented by *evidence.Builder. A separate, optional interface (not
+// folded into LatestProvider) because /api/timeseries is the one endpoint that queries
+// Prometheus directly per-request rather than reading the runner's snapshot -- and because
+// Builder already sits behind promclient.Client, an interface-behind-an-interface here would add
+// a layer without adding real testability.
+type TimeSeriesProvider interface {
+	CPUUsageSeries(ctx context.Context, workload model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error)
+	MemoryUsageSeries(ctx context.Context, workload model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error)
+}
+
 // Server serves the analyzer's HTTP endpoints.
 type Server struct {
-	mux    *http.ServeMux
-	latest LatestProvider
-	logger *slog.Logger
+	mux     *http.ServeMux
+	latest  LatestProvider
+	builder TimeSeriesProvider // nil is valid: /api/timeseries then returns 501
+	logger  *slog.Logger
 }
 
 // New builds a Server. It implements http.Handler directly, so callers wire it into an
-// http.Server without an extra adapter.
-func New(latest LatestProvider, logger *slog.Logger) *Server {
-	s := &Server{mux: http.NewServeMux(), latest: latest, logger: logger}
+// http.Server without an extra adapter. builder may be nil (disables /api/timeseries only).
+// staticDir, if non-empty, serves the built frontend (frontend/dist after `npm run build`) at
+// "/" with SPA fallback -- see AGENTS.md/docs/architecture.md's "web" module: one deployable,
+// no separate Node process at runtime.
+func New(latest LatestProvider, builder TimeSeriesProvider, staticDir string, logger *slog.Logger) *Server {
+	s := &Server{mux: http.NewServeMux(), latest: latest, builder: builder, logger: logger}
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.Handle("GET /metrics", promhttp.Handler())
 	s.mux.HandleFunc("GET /api/runs/latest", s.handleLatestRun)
 	s.mux.HandleFunc("GET /api/findings", s.handleFindings)
+	s.mux.HandleFunc("GET /api/timeseries", s.handleTimeseries)
+	if staticDir != "" {
+		s.mux.HandleFunc("GET /", spaHandler(staticDir))
+	}
 	return s
+}
+
+// spaHandler serves files directly out of dir; any path that doesn't correspond to a real file
+// (a React Router route like /findings/abc123, not a real file on disk) falls back to
+// index.html, so a hard refresh or a direct link to a client-side route works.
+func spaHandler(dir string) http.HandlerFunc {
+	fileServer := http.FileServer(http.Dir(dir))
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := filepath.Join(dir, filepath.Clean(r.URL.Path))
+		if info, err := os.Stat(path); err != nil || info.IsDir() {
+			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+			return
+		}
+		fileServer.ServeHTTP(w, r)
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +137,69 @@ func (s *Server) handleFindings(w http.ResponseWriter, r *http.Request) {
 		fs = []model.Finding{}
 	}
 	writeJSON(w, http.StatusOK, fs)
+}
+
+// handleTimeseries serves one workload/container's recent usage series plus its current
+// request/limit, for the dashboard's usage-vs-request chart. The backend runs a fixed,
+// parameterized query (namespace/workload/container/metric/window are all validated inputs into
+// a query this code already controls) -- the browser never gets to send arbitrary PromQL
+// (docs/architecture.md: "the API returns only findings JSON; Prometheus is ClusterIP-only").
+func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
+	if s.builder == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "timeseries endpoint not configured"})
+		return
+	}
+	q := r.URL.Query()
+	ns, name, container, metric := q.Get("namespace"), q.Get("workload"), q.Get("container"), q.Get("metric")
+	if ns == "" || name == "" || container == "" || metric == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "namespace, workload, container and metric are required query params"})
+		return
+	}
+	kind := q.Get("kind")
+	if kind == "" {
+		kind = "Deployment"
+	}
+	window := 24 * time.Hour
+	if ws := q.Get("window"); ws != "" {
+		if d, err := time.ParseDuration(ws); err == nil {
+			window = d
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	wl := model.WorkloadRef{Namespace: ns, Name: name, Kind: kind}
+	now := time.Now()
+
+	var (
+		points         []evidence.Point
+		request, limit float64
+		err            error
+	)
+	switch metric {
+	case "cpu":
+		points, request, limit, err = s.builder.CPUUsageSeries(ctx, wl, container, window, now)
+	case "memory":
+		points, request, limit, err = s.builder.MemoryUsageSeries(ctx, wl, container, window, now)
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "metric must be \"cpu\" or \"memory\""})
+		return
+	}
+	if err != nil {
+		s.logger.Warn("timeseries query failed", "namespace", ns, "workload", name, "container", container, "metric", metric, "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "querying prometheus failed"})
+		return
+	}
+	if points == nil {
+		points = []evidence.Point{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"metric":  metric,
+		"request": request,
+		"limit":   limit,
+		"points":  points,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, code int, body any) {

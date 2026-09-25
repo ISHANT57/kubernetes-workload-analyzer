@@ -1,26 +1,32 @@
 # backend
 
-Go analyzer skeleton (Phase 3). No rule engine yet — see `docs/requirements.md` §3 for R001–R005,
-which land in Phase 4. This phase is the plumbing: config, structured logging, a Prometheus
-client, a Kubernetes client (scoped to D-007), an analysis loop that smoke-tests both and keeps
-an in-memory snapshot, and the operational HTTP endpoints.
+Go analyzer: Kubernetes discovery, Prometheus queries, the rule engine (R001–R004; R005 is the
+data-quality gate embedded in `internal/evidence`), cost estimation, and the JSON API the
+`frontend/` dashboard consumes.
 
 ## Layout
 
 ```
-cmd/analyzer/main.go        wiring only: config -> clients -> runner -> http server
+cmd/analyzer/main.go        wiring only: config -> clients -> analyzer -> runner -> http server
+cmd/verify/main.go          manual debug tool: prints raw evidence for demo/ fixtures
 internal/config/            env-var configuration, validated
 internal/logging/           structured JSON logging (stdlib log/slog)
-internal/model/             dependency-free domain types (AnalysisRun, WorkloadRef, ...)
-internal/promclient/        Prometheus client behind an interface
+internal/model/             dependency-free domain types (AnalysisRun, Finding, WorkloadRef, ...)
+internal/promclient/        Prometheus client behind an interface (instant + range queries)
 internal/k8sclient/         Kubernetes client behind an interface, scoped to D-007
+internal/evidence/          builds WorkloadEvidence from Prometheus only (no `pods` access);
+                             self-calibrated data-quality/confidence tiering
+internal/rules/             R001-R004 as pure functions over WorkloadEvidence
+internal/cost/              estimated cost impact -- explicit "Estimated", never "savings"
+internal/findings/          orchestrates evidence+rules+cost into a ranked, stably-ID'd list
 internal/runner/            the analysis loop: timer, failure handling, in-memory snapshot
-internal/httpserver/        /healthz, /readyz, /metrics, /api/runs/latest
+internal/httpserver/        /healthz /readyz /metrics /api/findings /api/runs/latest
+                             /api/timeseries, and (if STATIC_DIR is set) the built frontend
 internal/metrics/           the analyzer's own Prometheus metrics (self-observability)
 ```
 
-Every external call (Prometheus, Kubernetes) sits behind a small interface, so `internal/runner`
-is tested entirely with fakes — no live cluster needed for `go test`.
+Every external call (Prometheus, Kubernetes) sits behind a small interface, so everything except
+`cmd/*` is tested entirely with fakes/synthetic evidence — no live cluster needed for `go test`.
 
 ## Run it locally
 
@@ -37,18 +43,30 @@ Then, from `backend/`:
 CLUSTER_ID=workload-analyzer \
 KUBE_CONTEXT=kind-workload-analyzer \
 ANALYSIS_INTERVAL=30s \
+CPU_CORE_HOUR_USD=0.0316 MEMORY_GIB_HOUR_USD=0.0042 PRICE_SOURCE="your source here" \
 go run ./cmd/analyzer
 ```
 
 `PROMETHEUS_URL` defaults to `http://localhost:9090` (matching the port-forward above);
-`LISTEN_ADDR` defaults to `127.0.0.1:8080` (loopback-only, per the threat model). See
-`internal/config/config.go` for every variable and its default.
+`LISTEN_ADDR` defaults to `127.0.0.1:8080` (loopback-only, per the threat model).
+`CPU_CORE_HOUR_USD`/`MEMORY_GIB_HOUR_USD` are optional: findings work without them, just with no
+`cost` field -- there is no built-in default price (docs/requirements.md §4: a default would
+imply a real cloud price that isn't yours). See `internal/config/config.go` for every variable.
+
+**To also serve the dashboard from this same binary** (see `frontend/README.md` for building it):
+```bash
+STATIC_DIR=$(pwd)/../frontend/dist go run ./cmd/analyzer
+# then open http://localhost:8080/
+```
+Without `STATIC_DIR`, the backend is still fully usable as an API-only server -- useful during
+frontend development, where `npm run dev` proxies to it instead (frontend/vite.config.ts).
 
 Check it's working:
 ```bash
 curl localhost:8080/healthz              # process liveness -- always ok
 curl localhost:8080/readyz               # 200 only when the last run was fully clean
-curl localhost:8080/api/runs/latest      # the current snapshot as JSON
+curl localhost:8080/api/findings         # the ranked finding list
+curl 'localhost:8080/api/timeseries?namespace=demo&workload=X&container=c&metric=cpu&window=24h'
 curl localhost:8080/metrics | grep ^analyzer_
 ```
 
@@ -60,10 +78,13 @@ gofmt -l .        # must print nothing
 go test ./...
 ```
 
-All tests use fakes/the k8s.io/client-go fake clientset — none require a live cluster or
-Prometheus. `internal/runner`'s tests are the direct proof of the Phase 3 done-criterion
-"degrades cleanly with Prometheus down": see `TestRunOnce_PrometheusDown` and
-`TestLatest_WorkloadsSeenSurvivesAFailedRun`.
+All tests use fakes or synthetic `evidence.WorkloadEvidence` -- none require a live cluster or
+Prometheus. Notable ones:
+- `internal/runner`: `TestRunOnce_PrometheusDown`, `TestLatest_WorkloadsSeenSurvivesAFailedRun`
+  -- the "degrades cleanly" behavior, both live-verified against the real cluster too.
+- `internal/rules`: one fixture per `demo/` scenario, matching `demo/expected-findings.yaml`.
+- `internal/evidence`: `TestBurstiness_ZeroMedianWithRealTail_IsInfinite` -- a regression test
+  for a real bug caught live (see docs/requirements.md §3 implementation notes).
 
 ## Kubernetes access
 

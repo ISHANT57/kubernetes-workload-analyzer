@@ -1,7 +1,8 @@
 # Kubernetes Workload Analyzer
 
-> **Status:** Phases 0–3 done (foundation, Kubernetes fundamentals + monitoring, demo workloads,
-> backend skeleton). Phase 4 (findings R001–R005) next. See [PHASES.md](PHASES.md).
+> **Status:** Phases 0–5 done: foundation, Kubernetes fundamentals + monitoring, demo workloads,
+> Go backend with a working rule engine, and a working React dashboard — end-to-end, live against
+> a real cluster. Phase 6 (Grafana links) next. See [PHASES.md](PHASES.md).
 
 A portfolio project that observes a Kubernetes cluster, analyzes real workload, resource and
 reliability metrics, and turns them into **evidence-based findings** shown in a custom dashboard.
@@ -47,15 +48,14 @@ document where they agree and differ.
 
 Why each choice was made: [docs/DECISIONS.md](docs/DECISIONS.md).
 
-## Planned layout
+## Layout
 
 ```
-backend/    Go analyzer
-frontend/   React dashboard
-deploy/     prometheus values, rbac
+backend/    Go analyzer: evidence, rule engine, cost estimator, JSON API (backend/README.md)
+frontend/   React + Vite + TS + uPlot dashboard (frontend/README.md)
+deploy/     prometheus values, metrics-server, rbac
 demo/       deterministic test workloads + expected findings
 docs/       requirements, architecture, decisions, threat model
-tests/      integration and failure tests
 ```
 
 ## Local setup
@@ -80,11 +80,15 @@ Optionally apply the demo workloads (Phase 2) so there is something interesting 
 kubectl apply -k demo/
 ```
 
-Run the backend (Phase 3; no rule engine yet, see [backend/README.md](backend/README.md)):
+Build the dashboard and run the backend serving it, all as one binary (see
+[backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for details):
 ```bash
 kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
-cd backend && CLUSTER_ID=workload-analyzer KUBE_CONTEXT=kind-workload-analyzer go run ./cmd/analyzer
-# curl localhost:8080/healthz, /readyz, /api/runs/latest, /metrics
+(cd frontend && npm install && npm run build)
+cd backend && CLUSTER_ID=workload-analyzer KUBE_CONTEXT=kind-workload-analyzer \
+  CPU_CORE_HOUR_USD=0.0316 MEMORY_GIB_HOUR_USD=0.0042 PRICE_SOURCE="example only" \
+  STATIC_DIR=$(pwd)/../frontend/dist go run ./cmd/analyzer
+# open http://localhost:8080/
 ```
 
 Measured footprint and verification results: [docs/architecture.md](docs/architecture.md).

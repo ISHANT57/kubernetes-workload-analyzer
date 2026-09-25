@@ -6,6 +6,15 @@ import (
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
 )
 
+// Point is one timestamped sample, used for the dashboard's usage-over-time chart
+// (GET /api/timeseries). The backend serves this so the browser never talks to Prometheus
+// directly (docs/architecture.md): the frontend gets a small, safe, pre-shaped JSON array, never
+// raw PromQL access.
+type Point struct {
+	UnixSeconds int64   `json:"t"`
+	Value       float64 `json:"v"`
+}
+
 // WorkloadEvidence is everything the rule engine (internal/rules) needs to evaluate one
 // container of one workload. It is built entirely from Prometheus/kube-state-metrics data
 // (Builder never touches the Kubernetes Pods API -- D-007 grants no `pods` access, and pod specs

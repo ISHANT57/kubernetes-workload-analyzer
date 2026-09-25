@@ -45,6 +45,13 @@ type Config struct {
 
 	// KubernetesTimeout bounds every individual Kubernetes API call.
 	KubernetesTimeout time.Duration
+
+	// AnalysisTimeout bounds one whole findings pass (evidence gathering + rule evaluation
+	// across every workload/container), not just one query within it. A single pass can issue
+	// well over a hundred Prometheus queries for a modest number of workloads (verified: ~12-14
+	// per container), so a per-query timeout alone does not stop the whole pass from running
+	// arbitrarily long if Prometheus is merely slow rather than fully down.
+	AnalysisTimeout time.Duration
 }
 
 // Load reads configuration from the environment, applies defaults for optional fields, and
@@ -79,6 +86,12 @@ func Load() (Config, error) {
 	}
 	cfg.KubernetesTimeout = k8sTimeout
 
+	analysisTimeout, err := getDuration("ANALYSIS_TIMEOUT", 2*time.Minute)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	cfg.AnalysisTimeout = analysisTimeout
+
 	// ClusterID and PrometheusURL have no "must not be empty" check here: getEnv already
 	// substitutes their defaults for an empty/unset value, so cfg.ClusterID and
 	// cfg.PrometheusURL can never actually be "" once Load reaches this point. An earlier
@@ -94,6 +107,9 @@ func Load() (Config, error) {
 	}
 	if cfg.KubernetesTimeout <= 0 {
 		errs = append(errs, fmt.Errorf("KUBERNETES_TIMEOUT must be positive, got %s", cfg.KubernetesTimeout))
+	}
+	if cfg.AnalysisTimeout <= 0 {
+		errs = append(errs, fmt.Errorf("ANALYSIS_TIMEOUT must be positive, got %s", cfg.AnalysisTimeout))
 	}
 
 	if len(errs) > 0 {

@@ -65,22 +65,64 @@ missing data → R005 `insufficient`. Also: cAdvisor returns a pod-level series 
 Instant queries can miss short states (a CrashLoopBackOff between restarts); use
 `max_over_time(...[window])`.
 
-## 3. MVP rules (thresholds are proposals until validated on demo workloads)
+## 3. MVP rules — built and verified live, Phase 4 (2026-09-26)
 
-Every finding carries a `data_quality` block produced by R005. R001–R004 run only when R005
-status is `ok`.
+R001/R002 (percentile-based) each carry a `data_quality` block from R005's coverage-tier gate
+and only fire when its status is `ok`. R003/R004 (counter/state-based: restart counts and
+termination reasons) use a simpler gate -- "series present" -- not the coverage-tier check: a
+restart counter is meaningful with far less history than a percentile calculation needs, and
+applying the same 30m/24h/7d coverage bar to it would under-serve health findings that should be
+allowed to fire quickly.
 
-| ID | Rule | Condition | Window | Min data |
+| ID | Rule | Condition (as implemented) | Window | Min data |
 |---|---|---|---|---|
-| R001 | CPU over-requested | p95(usage) < 0.5 × request AND request − p95 ≥ 100m AND throttled ratio < 5% | standard 7d / demo 30m | R005 ok |
-| R002 | Memory over-requested | max(working set) < 0.5 × request AND request − max ≥ 64Mi AND no OOM in window | standard 7d / demo 30m | R005 ok |
-| R003 | Frequent restarts | restart increase ≥ 3 in 1h OR ≥ 10 in 24h; CrashLoopBackOff reason attached as evidence | 1h / 24h | series present |
-| R004 | OOM / memory instability | ≥ 1 OOMKilled termination in 24h (critical) OR max(working set) ≥ 0.9 × limit (warning) | 24h | series present |
-| R005 | Data quality gate | `insufficient`: history shorter than window or coverage < 80% · `stale`: newest sample older than 5m · `query_error`: query failed or timed out · else `ok` | per rule | — |
+| R001 | CPU over-requested | p95(usage) < 0.5 × request AND request − p95 ≥ 100m AND throttled ratio < 5% AND not HPA-CPU-coupled AND not bursty (p99/p50 ≤ 4) | R005 tier (30m/24h/7d) | R005 ok |
+| R002 | Memory over-requested | max(working set) < 0.5 × request AND request − max ≥ 64Mi AND no OOM in the last 24h | R005 tier (30m/24h/7d) | R005 ok |
+| R003 | Frequent restarts | restart increase ≥ 3 in 1h OR ≥ 10 in 24h; waiting reason (e.g. CrashLoopBackOff) attached as evidence when present | 1h / 24h | restart counter present |
+| R004 | OOM | last_terminated_reason == OOMKilled AND restarts increased in the last 24h | 24h | termination reason + restart counter present |
+| R005 | Data quality gate | `insufficient`: below 80% coverage even at the 30m minimum tier (or zero data) · `stale`: newest sample older than 5m · `ok`: at least the 30m tier clears 80% | 30m / 24h / 7d tiers | — |
 
-Suggested requests: CPU = p95 × 1.2; memory = max × 1.15 (compared against KRR).
-Confidence: **HIGH** = ≥ 7d at ≥ 80% coverage · **MEDIUM** = ≥ 24h at ≥ 80% · **LOW** = demo profile.
-CPU and memory use different logic on purpose: too little memory kills the pod, too little CPU only slows it.
+**Not implemented in the MVP** (documented here so it isn't silently forgotten, not treated as
+done): R004's original design also included "max(working set) ≥ 0.9 × limit" as a warning-level
+near-limit signal separate from a confirmed OOM. No demo fixture exercises it and it was left out
+to keep R004 to the one condition actually verified end-to-end. Candidate for a later phase.
+
+Suggested requests: CPU = p95 × 1.2; memory = max × 1.15 (compared against KRR in a later phase).
+Confidence: **HIGH** = ≥ 7d at ≥ 80% coverage · **MEDIUM** = ≥ 24h at ≥ 80% · **LOW** = only the 30m
+minimum tier clears 80%. R003/R004 report no tiered confidence (empty) -- they are deterministic
+counter facts, not statistical estimates; `confidence_reason` explains why in place of a tier.
+CPU and memory use different logic on purpose: too little memory kills the pod, too little CPU only
+slows it.
+
+### Implementation notes (real bugs found via live verification, not just unit tests)
+- **Pod resolution without Pods API access (D-007):** `container_cpu_usage_seconds_total` etc.
+  only carry a `pod` label, not an owner reference. Pods are resolved via
+  `kube_pod_owner` joined to `kube_replicaset_owner` on the ReplicaSet name (`label_replace` on
+  both sides to align the join key) -- verified live to return exactly the right pod name before
+  being relied on. See `internal/evidence/builder.go`'s `resolvePodNames`.
+- **Coverage is self-calibrated, not assumed from a scrape interval.** An assumed 30s interval
+  was checked against real fixture data and found off by >2x (823 samples over ~15h where the
+  assumption predicted ~1816) -- likely scrape-job cadence differences and real gaps (see below).
+  Coverage instead comes from the actual sample timestamps returned: span covered ÷ window,
+  penalized for the single largest gap found.
+- **A `rate()` lookback that is too long silently defeats the bursty guard.** The CPU usage query
+  originally used `rate(...[5m])`, copied from krr's own pattern -- correct for krr's use case,
+  but for the cpu-spike fixture (30s burst every 300s) a 5-minute lookback smoothed every
+  evaluated point into a near-constant ~10% average, destroying the p50/p99 spread the burstiness
+  guard depends on. Changed to `rate(...[2m])`, short enough to leave idle-only points near zero
+  and burst-overlapping points visibly elevated.
+- **A zero median is the strongest possible burstiness signal, not the absence of one.** The
+  first version of the p99/p50 ratio returned 0 when p50 was exactly 0 (treating "no meaningful
+  median" the same as "no signal at all") -- exactly backwards for a workload idle more than half
+  the time with a real usage tail. Fixed to return +Inf in that case.
+- **Real infrastructure noise, not a bug:** every long-running demo workload showed one restart
+  with `reason=Unknown` from a `SandboxChanged` event (containerd sandbox recreation, most likely
+  from the laptop sleeping overnight -- the exact documented laptop-sleep-gaps risk). Correctly
+  did not trigger R003 (well under both thresholds) and did not affect R004 (checks the specific
+  reason string, not "any non-empty reason").
+- **Verified against real, non-fixture data too:** the live analyzer found a genuine R002 finding
+  on `kube-system/metrics-server` (200Mi requested vs ~59Mi observed) -- confirms the rule engine
+  generalizes beyond the demo/ fixtures it was designed against.
 
 ### Exceptions and caveats (these apply before any recommendation)
 - **HPA targets CPU/memory utilization:** utilization is measured *relative to request*. Lowering the request raises measured utilization and makes the HPA scale out sooner, which may cost *more*. Emit an "HPA-coupled — review together" finding, not a resize.

@@ -22,6 +22,12 @@ type Client interface {
 	// QueryInstant runs one PromQL instant query (evaluated at time.Now()) and returns its
 	// vector result.
 	QueryInstant(ctx context.Context, query string) (model.Vector, error)
+
+	// QueryRange runs one PromQL range query over [start, end] at the given step and returns
+	// its matrix result (one series per label set, each with its own timestamped samples).
+	// Phase 4's evidence builder uses this for every percentile/max/coverage calculation --
+	// those need real per-sample timestamps, not a single instant value.
+	QueryRange(ctx context.Context, query string, start, end time.Time, step time.Duration) (model.Matrix, error)
 }
 
 type httpClient struct {
@@ -63,4 +69,17 @@ func (c *httpClient) QueryInstant(ctx context.Context, query string) (model.Vect
 		return nil, fmt.Errorf("promclient: query %q: unexpected result type %T (want vector)", query, value)
 	}
 	return vector, nil
+}
+
+func (c *httpClient) QueryRange(ctx context.Context, query string, start, end time.Time, step time.Duration) (model.Matrix, error) {
+	r := apiv1.Range{Start: start, End: end, Step: step}
+	value, _, err := c.api.QueryRange(ctx, query, r)
+	if err != nil {
+		return nil, fmt.Errorf("promclient: range query %q: %w", query, err)
+	}
+	matrix, ok := value.(model.Matrix)
+	if !ok {
+		return nil, fmt.Errorf("promclient: range query %q: unexpected result type %T (want matrix)", query, value)
+	}
+	return matrix, nil
 }

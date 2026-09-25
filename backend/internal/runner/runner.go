@@ -1,10 +1,7 @@
 // Package runner implements the analysis loop: on a timer, it checks Prometheus and Kubernetes
-// connectivity and keeps the latest AnalysisRun in memory (docs/architecture.md "Analysis loop"):
-// a failed run never wipes out the last good snapshot, it only marks it stale.
-//
-// Phase 3 has no rules yet -- each run is a connectivity/RBAC smoke test, not a findings pass.
-// Phase 4 replaces the body of runOnce with real evidence-gathering and rule evaluation; the
-// run-tracking, snapshot and failure-handling shape here does not need to change.
+// connectivity, evaluates the rule engine (Phase 4: internal/findings) against every discovered
+// workload, and keeps the latest AnalysisRun and finding list in memory (docs/architecture.md
+// "Analysis loop"): a failed run never wipes out the last good snapshot, it only marks it stale.
 package runner
 
 import (
@@ -15,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/findings"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/k8sclient"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/metrics"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
@@ -23,16 +21,19 @@ import (
 
 // Runner owns the analysis loop and the latest snapshot.
 type Runner struct {
-	clusterID   model.ClusterID
-	interval    time.Duration
-	promTimeout time.Duration // bounds every Prometheus call this loop makes
-	k8sTimeout  time.Duration // bounds every Kubernetes call this loop makes
-	prom        promclient.Client
-	k8s         k8sclient.Client
-	logger      *slog.Logger
+	clusterID       model.ClusterID
+	interval        time.Duration
+	promTimeout     time.Duration // bounds every Prometheus call this loop makes
+	k8sTimeout      time.Duration // bounds every Kubernetes call this loop makes
+	analysisTimeout time.Duration // bounds one whole findings pass, not just one query in it
+	prom            promclient.Client
+	k8s             k8sclient.Client
+	analyzer        *findings.Analyzer // nil is valid: rule evaluation is skipped, connectivity checks still run
+	logger          *slog.Logger
 
 	mu                    sync.RWMutex
 	latest                *model.AnalysisRun // nil until the first run completes
+	latestFindings        []model.Finding    // sticky: only replaced when a run's K8s+Prometheus checks both succeed
 	lastGoodWorkloadsSeen int                // sticky across a failed K8s call; see runOnce
 }
 
@@ -40,16 +41,20 @@ type Runner struct {
 // k8sTimeout bound every individual call the loop makes to each source (AGENTS.md: "explicit
 // error handling ... never a request that can hang forever") -- they come from
 // config.Config.PrometheusTimeout/KubernetesTimeout, not from interval, so a slow query cannot
-// by itself stall the whole analysis loop past its next scheduled tick.
-func New(clusterID model.ClusterID, interval, promTimeout, k8sTimeout time.Duration, prom promclient.Client, k8s k8sclient.Client, logger *slog.Logger) *Runner {
+// by itself stall the whole analysis loop past its next scheduled tick. analyzer may be nil
+// (e.g. no cost pricing yet or findings deliberately disabled); the loop then still performs its
+// connectivity checks but never runs the rule engine.
+func New(clusterID model.ClusterID, interval, promTimeout, k8sTimeout, analysisTimeout time.Duration, prom promclient.Client, k8s k8sclient.Client, analyzer *findings.Analyzer, logger *slog.Logger) *Runner {
 	return &Runner{
-		clusterID:   clusterID,
-		interval:    interval,
-		promTimeout: promTimeout,
-		k8sTimeout:  k8sTimeout,
-		prom:        prom,
-		k8s:         k8s,
-		logger:      logger,
+		clusterID:       clusterID,
+		interval:        interval,
+		promTimeout:     promTimeout,
+		k8sTimeout:      k8sTimeout,
+		analysisTimeout: analysisTimeout,
+		prom:            prom,
+		k8s:             k8s,
+		analyzer:        analyzer,
+		logger:          logger,
 	}
 }
 
@@ -78,6 +83,17 @@ func (r *Runner) Latest() *model.AnalysisRun {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.latest
+}
+
+// Findings returns the most recent successfully-computed finding list. Sticky across a run that
+// could not gather workload data (Prometheus or Kubernetes down): the caller still sees the last
+// good findings rather than an empty list that would look like "everything is fine now".
+// AnalysisRun.Status on the concurrently-returned Latest() is what tells a caller whether this
+// list is fresh or stale.
+func (r *Runner) Findings() []model.Finding {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.latestFindings
 }
 
 func (r *Runner) runOnce(ctx context.Context) {
@@ -123,6 +139,25 @@ func (r *Runner) runOnce(ctx context.Context) {
 	} else {
 		run.WorkloadsSeen = len(refs)
 		r.lastGoodWorkloadsSeen = run.WorkloadsSeen
+	}
+
+	// Rule evaluation only runs when both sources are healthy this cycle and an Analyzer is
+	// configured: evidence gathering needs a live Prometheus to query and a live workload list
+	// to iterate, so attempting it during an outage would just be wasted queries producing
+	// mostly query_error evidence. The last good finding list stays as-is (sticky), and this
+	// run's Status/QueryErrors already say honestly that nothing fresh was computed.
+	if r.analyzer != nil && promErr == nil && k8sErr == nil {
+		analysisCtx, cancelAnalysis := context.WithTimeout(ctx, r.analysisTimeout)
+		fresh := r.analyzer.Analyze(analysisCtx, run.ID, refs, start)
+		cancelAnalysis()
+		run.FindingsCount = len(fresh)
+		r.mu.Lock()
+		r.latestFindings = fresh
+		r.mu.Unlock()
+	} else if r.analyzer != nil {
+		r.mu.RLock()
+		run.FindingsCount = len(r.latestFindings)
+		r.mu.RUnlock()
 	}
 
 	run.Status = statusFor(run.QueryErrors)

@@ -1,0 +1,27 @@
+.state {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.state-error {
+  color: var(--color-critical-fg);
+}
+
+.state-detail {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  opacity: 0.85;
+  word-break: break-word;
+}
+
+.stale-banner {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-fg);
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
+}

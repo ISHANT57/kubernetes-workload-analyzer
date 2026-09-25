@@ -9,7 +9,7 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
 | 2 | Demo workloads | Deterministic workloads in `demo/`, each mapped to an expected result in `demo/expected-findings.yaml` | Each workload shows its intended behaviour in Prometheus | DONE |
 | 3 | Backend skeleton | Go module: config, Prometheus client, Kubernetes client (D-007 scope), analysis-run object, `/healthz` `/readyz` `/metrics`, structured logs | Runs against the cluster; degrades cleanly with Prometheus down | DONE |
 | 4 | Findings (R001–R005) | Evidence builder, rule engine, finding model, stable IDs, cost calculator, REST API | Output matches `expected-findings.yaml` | DONE (KRR comparison deferred) |
-| 5 | Dashboard | React + Vite + TS + uPlot on recorded real output | Overview, Findings, Detail, Workloads, Platform Status pages | NOT STARTED |
+| 5 | Dashboard | React + Vite + TS + uPlot on recorded real output | Overview, Findings, Detail, Workloads, Platform Status pages | DONE |
 | 6 | Grafana integration | Links from findings to Grafana panels | Each resource finding links to its panel | NOT STARTED |
 | 7 | Production engineering | Retries, idempotency, partial-failure handling, structured errors, RBAC hardening, in-cluster deploy; tracing only if a need appears | Failure tests pass (Prometheus down, partial query failure, duplicate run, insufficient history) | NOT STARTED |
 | 8 | Final demonstration | Scripted demo covering the 8 points of the brief | Demo runbook in `docs/runbook.md` | NOT STARTED |
@@ -50,6 +50,14 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   notes: a `rate()` window that silently defeated the bursty guard, a p50=0 case that inverted
   the burstiness signal, and a misleading confidence-reason message. KRR comparison deferred to a
   later phase (not blocking; no demo fixture needs it).
+- 2026-09-26: Phase 5 done. React + Vite + TS dashboard (`frontend/`): Overview, Findings (filterable),
+  Finding Detail (full evidence, cost, and a real uPlot usage-vs-request chart for R001/R002),
+  Workloads, Platform Status. New small backend addition: GET /api/timeseries (reuses the evidence
+  builder's existing Prometheus queries; fixed, parameterized -- the browser still never sends
+  PromQL). Backend now also serves the built frontend directly (STATIC_DIR + SPA fallback) as one
+  deployable binary. Verified live with a real backend/cluster via Playwright, not just built and
+  assumed: desktop, mobile (390px), and dark mode all checked with zero console errors; one real
+  mobile CSS bug (long PromQL text overflowing the evidence table) found and fixed the same way.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

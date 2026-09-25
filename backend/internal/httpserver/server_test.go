@@ -1,13 +1,17 @@
 package httpserver
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/evidence"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
 )
 
@@ -26,7 +30,7 @@ func testLogger() *slog.Logger {
 func TestHealthz_AlwaysOK(t *testing.T) {
 	// /healthz must stay 200 even with no run at all -- it answers "is the process alive", not
 	// "is the data good" (that is /readyz's job).
-	s := New(&fakeLatestProvider{run: nil}, testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
@@ -36,7 +40,7 @@ func TestHealthz_AlwaysOK(t *testing.T) {
 }
 
 func TestReadyz_NoRunYet_NotReady(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -46,7 +50,7 @@ func TestReadyz_NoRunYet_NotReady(t *testing.T) {
 }
 
 func TestReadyz_CompleteRun_Ready(t *testing.T) {
-	s := New(&fakeLatestProvider{run: &model.AnalysisRun{Status: model.RunComplete}}, testLogger())
+	s := New(&fakeLatestProvider{run: &model.AnalysisRun{Status: model.RunComplete}}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -64,7 +68,7 @@ func TestReadyz_PrometheusDown_NotReady(t *testing.T) {
 		Status:      model.RunPartial,
 		QueryErrors: []model.QueryError{{Source: "prometheus", Message: "connection refused"}},
 	}
-	s := New(&fakeLatestProvider{run: run}, testLogger())
+	s := New(&fakeLatestProvider{run: run}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -82,7 +86,7 @@ func TestReadyz_PrometheusDown_NotReady(t *testing.T) {
 }
 
 func TestLatestRun_NoRunYet_ServiceUnavailable(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/runs/latest", nil))
 
@@ -93,7 +97,7 @@ func TestLatestRun_NoRunYet_ServiceUnavailable(t *testing.T) {
 
 func TestLatestRun_ReturnsTheRun(t *testing.T) {
 	run := &model.AnalysisRun{ID: "run-1", Status: model.RunComplete, WorkloadsSeen: 9}
-	s := New(&fakeLatestProvider{run: run}, testLogger())
+	s := New(&fakeLatestProvider{run: run}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/runs/latest", nil))
 
@@ -110,7 +114,7 @@ func TestLatestRun_ReturnsTheRun(t *testing.T) {
 }
 
 func TestFindings_EmptyList_NotNull(t *testing.T) {
-	s := New(&fakeLatestProvider{findings: nil}, testLogger())
+	s := New(&fakeLatestProvider{findings: nil}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
 
@@ -124,7 +128,7 @@ func TestFindings_EmptyList_NotNull(t *testing.T) {
 
 func TestFindings_ReturnsTheList(t *testing.T) {
 	fs := []model.Finding{{ID: "f1", RuleID: "R001"}, {ID: "f2", RuleID: "R002"}}
-	s := New(&fakeLatestProvider{findings: fs}, testLogger())
+	s := New(&fakeLatestProvider{findings: fs}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
 
@@ -137,8 +141,81 @@ func TestFindings_ReturnsTheList(t *testing.T) {
 	}
 }
 
+type fakeTimeSeriesProvider struct {
+	points     []evidence.Point
+	req, limit float64
+	err        error
+}
+
+func (f *fakeTimeSeriesProvider) CPUUsageSeries(ctx context.Context, wl model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error) {
+	return f.points, f.req, f.limit, f.err
+}
+func (f *fakeTimeSeriesProvider) MemoryUsageSeries(ctx context.Context, wl model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error) {
+	return f.points, f.req, f.limit, f.err
+}
+
+func TestTimeseries_NoBuilderConfigured_501(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=cpu", nil))
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501 when no TimeSeriesProvider is configured", rec.Code)
+	}
+}
+
+func TestTimeseries_MissingParams_400(t *testing.T) {
+	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for missing required params", rec.Code)
+	}
+}
+
+func TestTimeseries_InvalidMetric_400(t *testing.T) {
+	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=disk", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 for an unsupported metric", rec.Code)
+	}
+}
+
+func TestTimeseries_Success(t *testing.T) {
+	provider := &fakeTimeSeriesProvider{points: []evidence.Point{{UnixSeconds: 100, Value: 0.5}}, req: 1.0, limit: 2.0}
+	s := New(&fakeLatestProvider{}, provider, "", testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=cpu", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var body struct {
+		Metric  string           `json:"metric"`
+		Request float64          `json:"request"`
+		Limit   float64          `json:"limit"`
+		Points  []evidence.Point `json:"points"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decoding response: %v", err)
+	}
+	if body.Metric != "cpu" || body.Request != 1.0 || body.Limit != 2.0 || len(body.Points) != 1 {
+		t.Errorf("decoded body = %+v, want metric=cpu request=1 limit=2 with 1 point", body)
+	}
+}
+
+func TestTimeseries_QueryError_502NotCrash(t *testing.T) {
+	provider := &fakeTimeSeriesProvider{err: errors.New("prometheus unreachable")}
+	s := New(&fakeLatestProvider{}, provider, "", testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=memory", nil))
+	if rec.Code != http.StatusBadGateway {
+		t.Errorf("status = %d, want 502 when the underlying query fails", rec.Code)
+	}
+}
+
 func TestMetrics_Served(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 

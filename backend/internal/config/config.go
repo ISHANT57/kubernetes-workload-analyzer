@@ -36,6 +36,12 @@ type Config struct {
 	// Defaults to loopback-only, matching the threat model's "local-only until auth exists".
 	ListenAddr string
 
+	// StaticDir, if set, points at the built frontend (`cd frontend && npm run build` -> `dist/`)
+	// and serves it at "/" with SPA fallback -- the "web" module in docs/architecture.md's
+	// diagram. Empty (the default) disables this: the API-only backend is still fully useful on
+	// its own during frontend development (`npm run dev` proxies to it instead).
+	StaticDir string
+
 	// AnalysisInterval is how often the analysis loop runs.
 	AnalysisInterval time.Duration
 
@@ -64,6 +70,7 @@ func Load() (Config, error) {
 		Kubeconfig:    os.Getenv("KUBECONFIG_PATH"), // empty is valid: means "use default loading rules"
 		KubeContext:   os.Getenv("KUBE_CONTEXT"),
 		ListenAddr:    getEnv("LISTEN_ADDR", "127.0.0.1:8080"),
+		StaticDir:     os.Getenv("STATIC_DIR"), // empty is valid: means "API only, no frontend served"
 	}
 
 	var errs []error

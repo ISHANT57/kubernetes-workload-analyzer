@@ -1,0 +1,189 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  overflow-x: auto; /* safety net for wide tables on narrow viewports; checked live at 390px */
+}
+
+.card-title {
+  margin: 0 0 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.page-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+
+.stat-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.stat {
+  min-width: 110px;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.2rem;
+}
+
+.stat-value.stat-critical {
+  color: var(--color-critical-fg);
+}
+.stat-value.stat-warning {
+  color: var(--color-warning-fg);
+}
+.stat-value.stat-good {
+  color: var(--color-good-fg);
+}
+
+.finding-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.finding-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+.finding-row:hover {
+  background: var(--color-bg);
+}
+
+.finding-row .workload-name {
+  font-weight: 600;
+}
+
+.finding-row .problem {
+  color: var(--color-text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+table.data-table th,
+table.data-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.84rem;
+}
+
+table.data-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+table.data-table tbody tr:hover {
+  background: var(--color-bg);
+}
+
+.filters {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filters select,
+.filters input {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+.evidence-table {
+  margin-top: 0.5rem;
+}
+
+.evidence-table code {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  /* PromQL queries are long, unbroken strings (no spaces) that would otherwise force the table
+     wider than its card on narrow viewports -- checked live at 390px and found overflowing. */
+  word-break: break-all;
+  white-space: normal;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.kv-item .kv-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.kv-item .kv-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--color-text);
+}
+
+.cost-box {
+  border-left: 3px solid var(--color-info-fg);
+  padding: 0.6rem 0.9rem;
+  background: var(--color-bg);
+  border-radius: 0 6px 6px 0;
+}
+
+.cost-assumptions {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.section-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 1rem 0 0.4rem;
+}

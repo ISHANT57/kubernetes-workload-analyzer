@@ -3,6 +3,7 @@ import { getFindings } from '../api/client'
 import { EmptyState, ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatUSD } from '../format'
+import { grafanaWorkloadUrl } from '../grafana'
 import type { Finding } from '../api/types'
 
 function evidenceValue(f: Finding, metric: string): number | undefined {
@@ -42,6 +43,7 @@ export function Workloads() {
               <th>Observed</th>
               <th>Suggested</th>
               <th>Est. potential difference</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -63,6 +65,11 @@ export function Workloads() {
                   <td>{observed !== undefined ? fmt(observed) : '—'}</td>
                   <td>{suggested !== undefined ? fmt(suggested) : '—'}</td>
                   <td>{f.cost ? formatUSD(f.cost.potential_difference_usd) : <span style={{ color: 'var(--color-text-muted)' }}>not priced</span>}</td>
+                  <td>
+                    <a href={grafanaWorkloadUrl(f.workload.namespace, f.workload.name, f.workload.kind)} target="_blank" rel="noreferrer">
+                      Grafana ↗
+                    </a>
+                  </td>
                 </tr>
               )
             })}

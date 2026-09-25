@@ -7,6 +7,7 @@ import { ErrorState, LoadingState } from '../components/Status'
 import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatPercent, formatRelativeTime, formatUSD } from '../format'
+import { grafanaWorkloadUrl } from '../grafana'
 import type { Finding, TimeSeriesResponse } from '../api/types'
 
 const CHART_RULES: Record<string, 'cpu' | 'memory'> = { R001: 'cpu', R002: 'memory' }
@@ -160,6 +161,11 @@ function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' |
           color={metric === 'cpu' ? '#3b82f6' : '#a855f7'}
         />
       )}
+      <p style={{ marginTop: '0.6rem', fontSize: '0.82rem' }}>
+        <a href={grafanaWorkloadUrl(finding.workload.namespace, finding.workload.name, finding.workload.kind)} target="_blank" rel="noreferrer">
+          Investigate further in Grafana ↗
+        </a>
+      </p>
     </Card>
   )
 }

@@ -1,8 +1,8 @@
 # Kubernetes Workload Analyzer
 
-> **Status:** Phases 0–5 done: foundation, Kubernetes fundamentals + monitoring, demo workloads,
-> Go backend with a working rule engine, and a working React dashboard — end-to-end, live against
-> a real cluster. Phase 6 (Grafana links) next. See [PHASES.md](PHASES.md).
+> **Status:** Phases 0–7 done: foundation through a hardened, in-cluster-deployed backend with a
+> working React dashboard, Grafana links, and verified read-only RBAC — end-to-end, live against
+> a real cluster. Phase 8 (final demo write-up) next. See [PHASES.md](PHASES.md).
 
 A portfolio project that observes a Kubernetes cluster, analyzes real workload, resource and
 reliability metrics, and turns them into **evidence-based findings** shown in a custom dashboard.

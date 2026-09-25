@@ -89,6 +89,31 @@ Prometheus. Notable ones:
 ## Kubernetes access
 
 Local development uses the default kubeconfig (whatever `kubectl` itself uses), full admin
-access to the kind cluster. `deploy/rbac/analyzer.yaml` defines the actual D-007-scoped
-ClusterRole the backend will run under once deployed in-cluster (Phase 7) — see that file's
-comments for how to try it locally ahead of time.
+access to the kind cluster. In-cluster (below), it uses only the D-007-scoped ServiceAccount.
+
+## Deploy in-cluster (Phase 7)
+
+```bash
+# from the repo root -- builds the frontend too (backend/Dockerfile is multi-stage)
+docker build -f backend/Dockerfile -t k8s-workload-analyzer:local .
+kind load docker-image k8s-workload-analyzer:local --name workload-analyzer
+
+kubectl apply -f deploy/rbac/analyzer.yaml         # namespace, ServiceAccount, D-007 ClusterRole
+kubectl apply -f deploy/analyzer/deployment.yaml   # Deployment + Service
+kubectl -n analyzer rollout status deploy/analyzer
+
+kubectl -n analyzer port-forward svc/analyzer 8080:8080   # or open through an Ingress later
+```
+
+No kubeconfig is mounted -- `rest.InClusterConfig()` picks up the ServiceAccount token
+automatically. `PROMETHEUS_URL` points at the in-cluster Prometheus Service DNS name instead of
+`localhost` (see `deploy/analyzer/deployment.yaml`). Verified live: pod reaches `Running 1/1`,
+`/readyz` returns 200, `/api/findings` returns real findings through the Service, and the D-007
+RBAC restriction holds for a real token (see `docs/threat-model.md`).
+
+**Known gotcha, hit and fixed:** distroless's `nonroot` image sets `USER nonroot` (a name), which
+the kubelet cannot resolve to a UID to satisfy `runAsNonRoot: true` without an explicit numeric
+`runAsUser`/`runAsGroup: 65532` in the pod's securityContext -- omitting it fails with
+`CreateContainerConfigError: cannot verify user is non-root`.
+
+Rollback: `kubectl delete -f deploy/analyzer/deployment.yaml -f deploy/rbac/analyzer.yaml`.

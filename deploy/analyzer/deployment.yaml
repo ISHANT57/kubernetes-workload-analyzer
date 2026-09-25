@@ -1,0 +1,74 @@
+# In-cluster deployment of the analyzer backend (Phase 7). Runs as the `analyzer` ServiceAccount
+# (deploy/rbac/analyzer.yaml, D-007 scope) with no kubeconfig at all -- client-go's
+# rest.InClusterConfig() picks up the mounted ServiceAccount token automatically
+# (backend/internal/k8sclient/client.go). Requests/limits below are the analyzer's own advice
+# applied to itself: measured after deployment (see docs/requirements.md / PHASES.md Phase 7
+# notes for the real numbers), not guessed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analyzer
+  namespace: analyzer
+  labels: {app: analyzer}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: analyzer}}
+  template:
+    metadata: {labels: {app: analyzer}}
+    spec:
+      serviceAccountName: analyzer
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        # distroless's nonroot image sets USER nonroot (a name), which the kubelet cannot
+        # resolve to a UID to verify runAsNonRoot without an explicit numeric UID here -- caught
+        # live (CreateContainerConfigError: "cannot verify user is non-root"). 65532 is
+        # distroless's documented nonroot uid/gid.
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: analyzer
+        image: k8s-workload-analyzer:local
+        imagePullPolicy: IfNotPresent  # loaded into kind directly, not pulled from a registry
+        ports: [{name: http, containerPort: 8080}]
+        env:
+        - {name: CLUSTER_ID, value: "workload-analyzer"}
+        # In-cluster Prometheus Service DNS name (namespace.svc.cluster.local); no port-forward
+        # needed once running inside the cluster.
+        - {name: PROMETHEUS_URL, value: "http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"}
+        - {name: ANALYSIS_INTERVAL, value: "60s"}
+        # Cost pricing: an explicit example, same disclaimer as local dev (docs/requirements.md
+        # §4) -- no built-in default exists; this is provided here, not baked into the image.
+        - {name: CPU_CORE_HOUR_USD, value: "0.031611"}
+        - {name: MEMORY_GIB_HOUR_USD, value: "0.004237"}
+        - {name: PRICE_SOURCE, value: "example only, approx AWS m5.large on-demand blended rate, NOT a real quote"}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: ["ALL"]}
+        # Measured live (kubectl top, sampled across several analysis cycles): idle ~1m CPU,
+        # peaks to ~18m during a run; steady ~10Mi memory. Requests below are the measured peak
+        # plus headroom, not a guess -- the analyzer applying its own R001/R002 logic to itself
+        # would have flagged the original guesses here (cpu 20m was already close; memory 48Mi
+        # was over-requested against a real ~10Mi, tightened to 32Mi).
+        resources:
+          requests: {cpu: 25m, memory: 32Mi}
+          limits: {memory: 128Mi}
+        readinessProbe:
+          httpGet: {path: /readyz, port: http}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: {path: /healthz, port: http}
+          initialDelaySeconds: 5
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analyzer
+  namespace: analyzer
+spec:
+  selector: {app: analyzer}
+  ports: [{name: http, port: 8080, targetPort: 8080}]

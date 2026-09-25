@@ -11,7 +11,7 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
 | 4 | Findings (R001–R005) | Evidence builder, rule engine, finding model, stable IDs, cost calculator, REST API | Output matches `expected-findings.yaml` | DONE (KRR comparison deferred) |
 | 5 | Dashboard | React + Vite + TS + uPlot on recorded real output | Overview, Findings, Detail, Workloads, Platform Status pages | DONE |
 | 6 | Grafana integration | Links from findings to Grafana panels | Each resource finding links to its panel | DONE |
-| 7 | Production engineering | Retries, idempotency, partial-failure handling, structured errors, RBAC hardening, in-cluster deploy; tracing only if a need appears | Failure tests pass (Prometheus down, partial query failure, duplicate run, insufficient history) | NOT STARTED |
+| 7 | Production engineering | Retries, idempotency, partial-failure handling, structured errors, RBAC hardening, in-cluster deploy; tracing only if a need appears | Failure tests pass (Prometheus down, partial query failure, duplicate run, insufficient history) | DONE |
 | 8 | Final demonstration | Scripted demo covering the 8 points of the brief | Demo runbook in `docs/runbook.md` | NOT STARTED |
 
 ## Log
@@ -65,6 +65,29 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   backend change needed, since it's a URL, not a query result. Grafana's existing login
   requirement is left as-is (no anonymous-access change), matching the threat model's
   read-only/least-privilege posture.
+- 2026-09-26: Phase 7 done. `backend/Dockerfile` (new): multi-stage build, `node:24-alpine` for the
+  frontend then `golang:1.27-alpine` (`CGO_ENABLED=0`, `-trimpath -ldflags="-s -w"`) onto
+  `gcr.io/distroless/static-debian12:nonroot` -- 45.7 MB image, no shell, no package manager.
+  `deploy/rbac/analyzer.yaml` gained a dedicated `analyzer` namespace (ServiceAccount moved out of
+  `default`); D-007 ClusterRole/ClusterRoleBinding content unchanged. `deploy/analyzer/deployment.yaml`
+  (new): Deployment + Service, `runAsNonRoot: true` with explicit `runAsUser`/`runAsGroup: 65532`
+  (distroless's `nonroot` user is a name, not a UID -- kubelet cannot verify non-root without one,
+  hit as a real `CreateContainerConfigError` first), `allowPrivilegeEscalation: false`,
+  `readOnlyRootFilesystem: true`, all capabilities dropped, `seccompProfile: RuntimeDefault`.
+  Resource requests/limits measured live with `kubectl top` (~1-18m CPU / 10Mi memory observed)
+  then set with headroom (`25m`/`32Mi` request, `128Mi` memory limit), not guessed. Verified live,
+  in-cluster, twice: (1) normal path -- pod `Running 1/1`, `/readyz` 200, `/api/findings` returns
+  real findings through the ClusterIP Service, D-007 RBAC re-verified with the real in-cluster
+  ServiceAccount token (`kubectl auth whoami`, isolated `KUBECONFIG=/dev/null`) confirming no
+  `pods`/`secrets`/write access; (2) failure path -- Prometheus taken down by patching its own
+  Operator-managed CR to `replicas: 0` (a direct StatefulSet scale-down was found to be silently
+  reverted by the operator within ~52s, a real methodology bug caught by a false-negative result,
+  fixed by using the CR instead) produced a genuine in-cluster DNS-path connection-refused error,
+  `status: partial`, sticky findings (stayed at 3, never dropped), `/readyz` 503; restoring the CR
+  to `replicas: 1` brought Prometheus back and the analyzer's next cycle returned to `status:
+  complete` and `/readyz` 200 on its own, no restart needed. `docs/threat-model.md` and
+  `docs/architecture.md` updated with the real in-cluster deployment shape and RBAC verification
+  detail.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

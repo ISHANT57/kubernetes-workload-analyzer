@@ -34,7 +34,7 @@ Conclusion: "read-only" is **not** "harmless". Pod read access is sensitive.
 
 | Threat | Mitigation (proposed) |
 |---|---|
-| Backend ServiceAccount token leaks | Token can only get/list/watch namespaces, nodes, deployments, replicasets, statefulsets, daemonsets, HPAs, events (D-007). No pods (env vars), secrets, configmaps, pods/log, pods/exec, or write verbs. Verify: `kubectl auth can-i --list --as=system:serviceaccount:<ns>:<sa>` |
+| Backend ServiceAccount token leaks | Token can only get/list/watch namespaces, nodes, deployments, replicasets, statefulsets, daemonsets, HPAs, events (D-007). No pods (env vars), secrets, configmaps, pods/log, pods/exec, or write verbs. **Verified live in Phase 7, not just simulated**: the actual in-cluster analyzer Deployment (`deploy/analyzer/`) runs as this ServiceAccount with no kubeconfig at all; a real bearer token (`kubectl create token analyzer -n analyzer`), used from an isolated kubeconfig (`KUBECONFIG=/dev/null`) with identity confirmed via `kubectl auth whoami`, could list deployments/events but got `Forbidden` on `get pods`, `get secrets`, and `delete deployments` |
 | Event messages reveal details | Events are readable under D-007. Messages can name images, volumes and referenced Secrets (e.g. failed mounts), never Secret values. Show event messages escaped; don't log them in full |
 | Secrets baked into the React bundle | Vite embeds every `VITE_*` env var into the public JS bundle. Never put tokens or URLs with credentials there; the frontend only calls the same-origin backend API |
 | Secrets pushed to the public GitHub repo | `.gitignore` covers kubeconfig, `.env`, keys; review `git diff --cached` before each commit. Optional later: a secret scanner in CI (ask first) |

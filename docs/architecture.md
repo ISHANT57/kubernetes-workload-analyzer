@@ -101,7 +101,14 @@ pod specs or env vars. All metrics (usage, requests, restarts, OOM) come from Pr
 
 ### Where it runs
 During development the backend runs on the host and reaches Prometheus via `kubectl port-forward`.
-It is packaged to run in-cluster in Phase 7, with its own ServiceAccount.
+It also runs in-cluster (Phase 7, `deploy/analyzer/`): a distroless multi-stage image
+(`backend/Dockerfile`, ~46 MB, non-root, read-only root filesystem, no shell), served as one
+Deployment + Service in its own `analyzer` namespace, using its own ServiceAccount (D-007) with
+no kubeconfig at all -- `rest.InClusterConfig()` picks up the mounted token automatically.
+Prometheus is reached via its in-cluster Service DNS name instead of a port-forward. Verified
+live: RBAC (see threat-model.md), Service routing, and real measured resource usage (idle ~1m
+CPU / 10Mi memory, peaks to ~18m CPU during an analysis run) used to set the Deployment's own
+requests -- the analyzer's own advice applied to itself.
 
 ### Failure behaviour (summary)
 | Failure | Detection | Behaviour |
@@ -130,6 +137,7 @@ It is packaged to run in-cluster in Phase 7, with its own ServiceAccount.
 | Docker Hub pulls (kindest/node, busybox) | FREE-TIER: anonymous pull rate limits | pull once, then `kind load` |
 | PostgreSQL | FREE SELF-HOSTED | D-004 (proposed: not in MVP) |
 | stress-ng / busybox images for demo workloads | FREE LOCAL (public images) | Phase 2 |
+| `golang:1.27-alpine`, `node:24-alpine`, `gcr.io/distroless/static-debian12:nonroot` (Docker build stages) | FREE LOCAL (public images) | Phase 7; built and verified locally, `kind load docker-image` (no registry needed) |
 | GitHub Actions (later CI) | FREE-TIER: free minutes for public repos; limited minutes for private repos | Phase 7; optional |
 | OpenCost, KRR | FREE SELF-HOSTED / FREE LOCAL | reference and comparison only |
 

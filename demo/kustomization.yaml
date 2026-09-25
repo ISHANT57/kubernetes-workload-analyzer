@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- 00-namespace.yaml
+- 01-right-sized.yaml
+- 02-cpu-over-requested.yaml
+- 03-memory-over-requested.yaml
+- 04-cpu-spike.yaml
+- 05-oom.yaml
+- 06-crashloop.yaml
+- 07-hpa-coupled.yaml
+- 08-new-workload.yaml
+- 09-pending.yaml

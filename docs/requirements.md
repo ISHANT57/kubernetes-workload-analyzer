@@ -119,28 +119,43 @@ requests become idle capacity on nodes you still pay for.
 The pricing source sits behind an interface, so a flat-rate model can later be replaced by per-node
 pricing or OpenCost data.
 
-## 5. Demo workloads (design only; created in Phase 2)
+## 5. Demo workloads (built and verified in Phase 2, 2026-09-25)
 
-Namespace `demo`. Label `k8sa.dev/scenario=<name>`. Images pinned by digest. Apply with
-`kubectl apply -k demo/`; expected results in `demo/expected-findings.yaml` drive integration tests.
+Namespace `demo`. Label `k8sa.dev/scenario=<name>`. Apply with `kubectl apply -k demo/`; ground
+truth (captured against live Prometheus queries) is in `demo/expected-findings.yaml`, which
+drives the Phase 4 integration test.
 
-| # | Workload | Mechanism | Expected result |
-|---|---|---|---|
-| 1 | Right-sized (negative control) | request 500m / 128Mi; stress-ng ~40% of one core, ~60Mi | no finding |
-| 2 | CPU over-requested | request 1000m; stress-ng ~5% of one core | R001 |
-| 3 | Memory over-requested | request 1Gi; holds ~50Mi | R002 |
-| 4 | CPU spike | busybox: busy 30s, idle 270s, repeating | R001 LOW confidence or suppressed, with "bursty" caveat |
-| 5 | OOM | request = limit = 128Mi; stress-ng keeps 200M | R004 critical (+ R003) |
-| 6 | Restarting | busybox `exit 1` | R003 |
-| 7 | HPA-controlled | copy of #2 with an HPA on CPU utilization 70% | R001 replaced by "HPA-coupled" caveat and HPA-neutral request |
-| 8 | New workload | deployed ≥ 30m after the others | R005 `insufficient`, no R001/R002 |
-| 9 | Pending (optional) | CPU request 64 | no MVP rule; used in Phase 1 to learn scheduling (backlog rule) |
+**Deviation from the original design:** built with `registry.k8s.io/e2e-test-images/agnhost:2.53`
+and `resource-consumer:1.15.0` only — both already verified and cached on the node from Phase 1
+(no stress-ng, no busybox, zero new image pulls). agnhost's shell (`sh`/`busybox`/`timeout`/`yes`,
+confirmed present in Phase 1 Lab 02) gives precise, throttle-free fractional CPU via a
+busy/idle duty cycle (`timeout Ns yes >/dev/null; sleep Ms`), which stress-ng's `--cpus`/`--cpu-load`
+would only approximate. agnhost's built-in `stress` subcommand (already proven for the Phase 1
+OOM lab) covers the memory scenarios directly.
+
+| # | Workload | Mechanism | Verified result (2026-09-25) | Expected result |
+|---|---|---|---|---|
+| 1 | `right-sized` (negative control) | request 500m/128Mi; 40% CPU duty cycle + agnhost stress holding ~60Mi | 320–460m CPU (~80% of request), ~65Mi mem | no finding |
+| 2 | `cpu-over-requested` | request 1000m; 5% CPU duty cycle, no limit | `rate(...[2m])` ≈ 55–83m (~6% of request) | R001 |
+| 3 | `memory-over-requested` | request 1Gi; agnhost stress holds ~50Mi | ~57–60Mi steady | R002 |
+| 4 | `cpu-spike` | request 500m; 1 core busy 30s / idle 270s | 0m idle → 999m burst (caught live) | R001 suppressed/LOW, "bursty" caveat |
+| 5 | `oom` | request=limit=128Mi; agnhost stress allocates 200Mi | `OOMKilled`, exit 137, 5 restarts | R004 critical (+R003) |
+| 6 | `crashloop` | `sh -c "exit 1"` | `Error`, exit 1, 5 restarts, CrashLoopBackOff | R003 |
+| 7 | `hpa-coupled` | resource-consumer, real HPA (target 70% CPU util), no load driver | idle (~0m/5Mi), `kube_horizontalpodautoscaler_info` present | R001 replaced by "HPA-coupled" caveat + HPA-neutral request |
+| 8 | `new-workload` | agnhost pause, deployed with the others | idle, age < 10 min at check time | R005 `insufficient`, no R001/R002 |
+| 9 | `pending` | CPU request `64` | `FailedScheduling: Insufficient cpu`, pod Pending | no MVP rule; backlog scheduling-health rule |
 
 Notes:
-- For the HPA to actually scale (Phase 1 learning), metrics-server is needed (FREE SELF-HOSTED, small). Installed only after owner approval.
-- Images verified to exist: `ghcr.io/colinianking/stress-ng` (upstream author, multi-arch incl. amd64) and `docker.io/library/busybox:1.37`. `--cpu-load` is approximate under cgroup limits, so `expected-findings.yaml` uses ranges, not exact values.
-- Whether the OOM workload is recorded as `OOMKilled` at container level is UNVERIFIED (stress-ng respawns killed workers); proven in Phase 2.
-- Total demo CPU stays under ~1 core. Crash/OOM pods are cheap: kubelet backoff caps restarts at one every 5 minutes.
+- Fixture #7 does not drive load: the HPA-coupled *caveat logic* is what's under test here, not
+  actual scaling (that mechanism was already proven end-to-end in Phase 1 Lab 05 — lowering a
+  request under this exact HPA shape increased total allocation, CPU +50%/memory 3×).
+- Fixture #8's "newness" needs no special timing: any rule with a minimum-data window longer than
+  the fixture's actual age must gate to `insufficient` regardless of when it was created.
+- Total demo CPU stays under ~1.5 cores at peak (only #4's burst and #2's duty cycle overlap
+  briefly); steady-state is well under 1 core. OOM/crashloop restarts are cheap: kubelet backoff
+  caps them at one every 5 minutes.
+- All values queried live via `kubectl get --raw` against the Prometheus service proxy, not
+  `kubectl top` alone (see docs/kubernetes-fundamentals.md entry 07).
 
 ## 6. Findings contract (draft; evolves from real backend output)
 

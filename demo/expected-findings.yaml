@@ -1,0 +1,113 @@
+# Ground truth for the demo/ fixtures, captured after ~5-10 min of real run time
+# (kubectl apply -k demo/, verified 2026-09-25 against live Prometheus queries -- not
+# just kubectl top). Used to drive the Phase 4 integration test: for each scenario, the
+# analyzer's findings for that workload must match `expect` below.
+#
+# Thresholds referenced here are the R001-R005 definitions in docs/requirements.md §3.
+# All CPU/memory figures below are one real MEASURED sample; duty-cycled workloads vary
+# run to run -- treat "observed" as an illustrative range, not an exact replay target.
+
+version: 1
+namespace: demo
+
+scenarios:
+  - name: right-sized
+    workload: {kind: Deployment, name: right-sized}
+    request: {cpu: 500m, memory: 128Mi}
+    observed: {cpu: "320-460m (avg ~400m)", memory: "~65Mi steady"}
+    mechanism: "40% CPU duty cycle (busy 4s / idle 6s) + agnhost stress holding ~60Mi"
+    expect:
+      rules_fired: []          # negative control: usage/request ratio ~80% CPU, ~50% mem -- neither crosses the <50% over-provisioned threshold
+      notes: "Must produce NO R001/R002 finding. If either fires, the threshold or the fixture's duty cycle needs revisiting."
+
+  - name: cpu-over-requested
+    workload: {kind: Deployment, name: cpu-over-requested}
+    request: {cpu: 1000m, memory: 64Mi}
+    observed: {cpu: "26-83m (avg ~55m via rate(...[2m]))", memory: "~0.6Mi"}
+    mechanism: "5% CPU duty cycle (busy 1s / idle 19s), no CPU limit (throttled ratio ~0%)"
+    expect:
+      rules_fired: [R001]
+      confidence: MEDIUM      # HIGH needs 7d/80% coverage; fixture is fresh
+      caveats: []             # no HPA, no throttling, not excluded as a Job
+
+  - name: memory-over-requested
+    workload: {kind: Deployment, name: memory-over-requested}
+    request: {cpu: 100m, memory: 1Gi}
+    observed: {cpu: "~0m", memory: "~57-60Mi steady"}
+    mechanism: "agnhost stress --mem-total=50Mi held via 5ms alloc sleep, no OOM (limit == request, generous)"
+    expect:
+      rules_fired: [R002]
+      confidence: MEDIUM
+
+  - name: cpu-spike
+    workload: {kind: Deployment, name: cpu-spike}
+    request: {cpu: 500m, memory: 64Mi}
+    observed: {cpu: "0m idle -> ~999m during a 30s burst, confirmed 2026-09-25T09:31Z", memory: "~0.4Mi"}
+    mechanism: "1 core busy 30s every 300s (10% duty cycle)"
+    expect:
+      rules_fired: []          # R001 must NOT fire confidently
+      caveats: [bursty]        # p99/p50 ratio >> 4 -> confidence capped at LOW per the bursty exception
+      notes: "If R001 fires at MEDIUM/HIGH confidence here, the bursty guard is broken."
+
+  - name: oom
+    workload: {kind: Deployment, name: oom}
+    request: {cpu: 50m, memory: 128Mi}
+    observed:
+      last_terminated_reason: OOMKilled
+      exit_code: 137
+      restarts: 5
+    mechanism: "agnhost stress allocates 200Mi against a 128Mi limit (request == limit)"
+    expect:
+      rules_fired: [R004, R003]
+      severity: critical
+
+  - name: crashloop
+    workload: {kind: Deployment, name: crashloop}
+    request: {cpu: 50m, memory: 32Mi}
+    observed:
+      last_terminated_reason: Error
+      exit_code: 1
+      restarts: 5
+      pod_status: CrashLoopBackOff
+    mechanism: "command exits 1 immediately"
+    expect:
+      rules_fired: [R003]
+      severity: warning
+      notes: "R004 must NOT fire -- reason is Error, not OOMKilled."
+
+  - name: hpa-coupled
+    workload: {kind: Deployment, name: hpa-coupled}
+    request: {cpu: 400m, memory: 64Mi}
+    observed: {cpu: "~0m idle", memory: "~5.4Mi", hpa: "kube_horizontalpodautoscaler_info present, target cpu Utilization 70"}
+    mechanism: "resource-consumer image, no load driver -- steady idle under a real HPA object"
+    expect:
+      rules_fired: []          # not a plain R001 resize
+      caveats: [hpa-coupled]
+      notes: >
+        Raw usage/request ratio (~0%) would normally scream R001, but an HPA with a
+        Utilization-type CPU target exists on this workload (kube_horizontalpodautoscaler_info +
+        kube_horizontalpodautoscaler_spec_target_metric). The rule engine must detect that and
+        substitute the HPA-coupled caveat + HPA-neutral request suggestion instead of a plain
+        resize recommendation (see Phase 1 Lab 05: a naive resize here inflated replicas 1->3 and
+        total requested CPU/memory, rather than reducing them).
+
+  - name: new-workload
+    workload: {kind: Deployment, name: new-workload}
+    request: {cpu: 100m, memory: 32Mi}
+    observed: {cpu: "~0m", memory: "~6.5Mi", age_at_check: "< 10 min"}
+    mechanism: "agnhost pause, deployed alongside the others"
+    expect:
+      rules_fired: []
+      data_quality: insufficient
+      notes: "R001/R002 both require the standard 7d or demo 30m window at 80% coverage; a workload this young must gate to `insufficient`, never guess from a partial window."
+
+  - name: pending
+    workload: {kind: Deployment, name: pending}
+    request: {cpu: "64"}
+    observed:
+      pod_status: Pending
+      event: "FailedScheduling: 0/1 nodes are available: 1 Insufficient cpu"
+    mechanism: "CPU request exceeds total node capacity (12 CPU)"
+    expect:
+      rules_fired: []          # no MVP rule consumes this yet (backlog: unschedulable/Pending rule)
+      notes: "Kept for the Phase-1-scoped scheduling-health backlog rule and for dashboard testing (a Pending workload has no usage data at all)."

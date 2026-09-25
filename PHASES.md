@@ -6,7 +6,7 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
 |---|---|---|---|---|
 | 0 | Foundation | Environment check, git, docs, decisions | D-001..D-007 recorded | DONE (D-004 still PROPOSED) |
 | 1 | Kubernetes + monitoring | Install kubectl/kind/helm; create 1-node kind cluster; hands-on fundamentals (Pod, Deployment, ReplicaSet, Service, Namespace, ConfigMap, Secret, requests/limits, probes, labels/selectors, Events, RBAC, HPA, scheduling, failure/recovery); **install trimmed kube-prometheus-stack at the end so history starts accumulating** | Every concept has an entry in `docs/kubernetes-fundamentals.md` (experiment, observation, command); Prometheus footprint MEASURED; all metrics in the measurement model return data; KSM cannot list secrets. Time limit: ~2 weeks | DONE |
-| 2 | Demo workloads | Deterministic workloads in `demo/`, each mapped to an expected result in `demo/expected-findings.yaml` | Each workload shows its intended behaviour in Prometheus; images pinned by digest | NOT STARTED |
+| 2 | Demo workloads | Deterministic workloads in `demo/`, each mapped to an expected result in `demo/expected-findings.yaml` | Each workload shows its intended behaviour in Prometheus | DONE |
 | 3 | Backend skeleton | Go module: config, Prometheus client, Kubernetes client (D-007 scope), analysis-run object, `/healthz` `/readyz` `/metrics`, structured logs | Runs against the cluster; degrades cleanly with Prometheus down | NOT STARTED |
 | 4 | Findings (R001–R005) | Evidence builder, rule engine, finding model, stable IDs, cost calculator, REST API | Output matches `expected-findings.yaml`; compared against KRR | NOT STARTED |
 | 5 | Dashboard | React + Vite + TS + uPlot on recorded real output | Overview, Findings, Detail, Workloads, Platform Status pages | NOT STARTED |
@@ -21,6 +21,11 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
 - 2026-09-24: Phase 1 done. kind v1.37.0 cluster; labs 01–05; metrics-server v0.9.0; kube-prometheus-stack 91.5.0 (~580 MiB pods).
   All measurement-model metrics verified with real conditions. `container_oom_events_total` stayed 0 through real OOMs → not used.
   KSM secrets access removed and verified; Grafana auth verified. Cluster-level recovery (Docker restart / reboot) moved to Phase 7.
+- 2026-09-25: 6 ADRs written (D-001,002,003,005,006,007) with Phase 1 evidence; branches cleaned up.
+- 2026-09-25: Phase 2 done. 9 demo/ workloads (agnhost/resource-consumer, no new image pulls) verified live
+  against Prometheus: OOMKilled/137, CrashLoopBackOff/exit 1, Pending/Insufficient cpu, HPA object present,
+  duty-cycled CPU and held memory all confirmed in expected ranges. `demo/expected-findings.yaml` is the
+  ground truth for the Phase 4 integration test.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

@@ -1,0 +1,17 @@
+# Unschedulable: requests more CPU than any node has (verified pattern from Phase 1 Lab 03).
+# No MVP rule consumes this yet; kept for the scheduling-health backlog rule and dashboard testing.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: pending, namespace: demo, labels: {app: pending, k8sa.dev/scenario: pending}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pending}}
+  template:
+    metadata: {labels: {app: pending, k8sa.dev/scenario: pending}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["pause"]
+        resources:
+          requests: {cpu: "64"}

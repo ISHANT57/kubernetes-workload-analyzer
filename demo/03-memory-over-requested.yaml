@@ -1,0 +1,18 @@
+# R002 (memory over-requested): holds ~50Mi steady against a 1Gi request. Limit kept generous
+# (1Gi) so this can never OOM -- it must stay a resource finding, not a health finding.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: memory-over-requested, namespace: demo, labels: {app: memory-over-requested, k8sa.dev/scenario: memory-over-requested}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: memory-over-requested}}
+  template:
+    metadata: {labels: {app: memory-over-requested, k8sa.dev/scenario: memory-over-requested}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["stress", "--cpus=0", "--mem-total=50Mi", "--mem-alloc-size=1Mi", "--mem-alloc-sleep=5ms"]
+        resources:
+          requests: {cpu: 100m, memory: 1Gi}
+          limits: {memory: 1Gi}

@@ -1,0 +1,19 @@
+# R005 gate: a workload with too little history for R001/R002 to run. Its "newness" is relative
+# to whatever window a rule asks for, so it is deployed alongside the others; any rule with a
+# minimum-data requirement longer than its actual age must report `insufficient`, not a guess.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: new-workload, namespace: demo, labels: {app: new-workload, k8sa.dev/scenario: new-workload}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: new-workload}}
+  template:
+    metadata: {labels: {app: new-workload, k8sa.dev/scenario: new-workload}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["pause"]
+        resources:
+          requests: {cpu: 100m, memory: 32Mi}
+          limits: {memory: 64Mi}

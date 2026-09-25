@@ -1,0 +1,19 @@
+# R004 (OOM) + R003 (restarts): request == limit == 128Mi, allocates 200Mi -> kernel OOM-kills
+# the container. Exact recipe verified in Phase 1 Lab 03: OOMKilled/exit 137, restarts climbing,
+# then CrashLoopBackOff.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: oom, namespace: demo, labels: {app: oom, k8sa.dev/scenario: oom}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: oom}}
+  template:
+    metadata: {labels: {app: oom, k8sa.dev/scenario: oom}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        args: ["stress", "--mem-total=200Mi", "--mem-alloc-size=1Mi", "--mem-alloc-sleep=10ms"]
+        resources:
+          requests: {cpu: 50m, memory: 128Mi}
+          limits: {memory: 128Mi}

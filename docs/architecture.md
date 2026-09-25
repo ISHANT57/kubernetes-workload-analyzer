@@ -1,4 +1,4 @@
-# Architecture (decisions accepted; nothing is built yet)
+# Architecture (decisions accepted; Phase 3 backend skeleton built and verified)
 
 ## Local environment (re-measured 2026-09-23, 15:05; supersedes first pass)
 
@@ -79,6 +79,14 @@ monitoring stack footprint is still an ESTIMATE until Phase 1 measures it.
 There is one data source, one user and one cluster. Separate collector/analyzer/API services would
 add deployment, networking and failure modes without solving a real problem. The module
 boundaries (`source`, `rules`, `cost`, `findings`, `web`) keep a later split possible.
+
+**Phase 3 built and verified** (`backend/`, see backend/README.md): `promclient`, `k8sclient`,
+`runner`, `httpserver`, `config`, `logging`, `metrics`, `model` — the sketch's `source/prom`,
+`source/k8s`, `runner`, `api`+`ops` respectively, under slightly different package names; `web`
+(serving the built React app) is added when the frontend exists (Phase 5), and `evidence`,
+`rules`, `cost`, `findings` are added in Phase 4. Verified end-to-end against the live cluster,
+including killing and restoring the Prometheus port-forward mid-run (see PHASES.md's Phase 3 log
+entry and `docs/reports/` once its report is published).
 
 ### Analysis loop (small design choice, open to change)
 An in-process ticker (for example every 5 min) runs queries and rules, then keeps the latest

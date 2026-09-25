@@ -1,0 +1,52 @@
+# D-007 ClusterRole for the analyzer backend, for in-cluster deployment (Phase 7).
+#
+# Not yet applied or used: the backend currently runs on the host during development, using the
+# default kubeconfig (docs/architecture.md "Where it runs"). This manifest exists now so the
+# scope is version-controlled and reviewable, and because it is the *exact* rule set already
+# verified end-to-end in Phase 1 Lab 04 (learn/04-config-secret-rbac.yaml, ServiceAccount
+# `analyzer-readonly`): get/list/watch only, on namespaces, nodes, deployments, replicasets,
+# statefulsets, daemonsets, horizontalpodautoscalers and events. No pods, no secrets, no
+# configmaps, no write verb anywhere. See docs/decisions/ADR-007-k8s-api-scope.md.
+#
+# To try the backend against this restricted identity locally (optional, ahead of Phase 7):
+#   kubectl apply -f deploy/rbac/analyzer.yaml
+#   TOKEN=$(kubectl -n default create token analyzer --duration=1h)
+#   # then run the binary with a kubeconfig built from $TOKEN, isolated from the admin
+#   # kubeconfig (see Phase 1 Lab 04's "testing pitfall" note in docs/kubernetes-fundamentals.md
+#   # for why this must not simply reuse the developer's own kubeconfig).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: analyzer
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: analyzer-readonly
+rules:
+- apiGroups: [""]
+  resources: [namespaces, nodes, events]
+  verbs: [get, list, watch]
+- apiGroups: ["apps"]
+  resources: [deployments, replicasets, statefulsets, daemonsets]
+  verbs: [get, list, watch]
+- apiGroups: ["autoscaling"]
+  resources: [horizontalpodautoscalers]
+  verbs: [get, list, watch]
+- apiGroups: ["events.k8s.io"]
+  resources: [events]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: analyzer-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: analyzer-readonly
+subjects:
+- kind: ServiceAccount
+  name: analyzer
+  namespace: default

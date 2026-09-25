@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 2 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-2-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-2-report.pdf docs/reports/phase-2-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <h1>Phase 2 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — demo workloads, verified against live Prometheus</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-25)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-25</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>6570169</code> (PR #5 merged)</td></tr>
+    <tr><td><b>Cluster</b></td><td>kind <code>workload-analyzer</code>, namespace <code>demo</code>, 9 workloads</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its
+    output · <span class="tag v">VERIFIED</span> checked against upstream documentation, source or
+    a registry · <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<!-- ============================ CONTENTS ============================ -->
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 2 was for</li>
+    <li>Design decision: agnhost only, not stress-ng/busybox</li>
+    <li>The duty-cycle technique</li>
+    <li>The nine fixtures, one by one</li>
+    <li>demo/expected-findings.yaml</li>
+    <li>Verification method</li>
+    <li>Live verification results</li>
+    <li>Re-verification 4.5 hours later</li>
+    <li>What Phase 2 confirms for the rule engine (R001–R005)</li>
+    <li>Resource footprint</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state, operating and rollback</li>
+    <li>Open items and next phase</li>
+    <li>Appendix A — Manifest reference</li>
+    <li>Appendix B — Verification query reference</li>
+  </ol>
+</section>
+
+<!-- ============================ 1 ============================ -->
+<section class="pb">
+  <h2>1. What Phase 2 was for</h2>
+  <p>Phase 1 built and verified the data layer (a kind cluster, a trimmed Prometheus stack, every
+  metric the planned rules depend on). But an idle lab cluster has nothing interesting to find —
+  no over-provisioning, no crashes, no OOMs. Phase 2's job was to build a <b>deterministic set of
+  broken/inefficient workloads</b> with known, predictable behaviour, so that:</p>
+  <ul>
+    <li>Phase 4's rule engine (R001–R005) has real Prometheus data to run against, not synthetic
+    or imagined numbers;</li>
+    <li>each rule's correctness can be checked against a written-down expected answer
+    (<code>demo/expected-findings.yaml</code>), rather than eyeballed;</li>
+    <li>the tricky edge cases identified in Phase 1 — HPA coupling, bursty workloads, insufficient
+    history — have a concrete fixture to exercise them, not just a paragraph in a design doc.</li>
+  </ul>
+  <p>Phase 2 wrote no analyzer code. It is entirely Kubernetes manifests plus verification.</p>
+
+  <h3>Done-criterion (PHASES.md)</h3>
+  <div class="box key">"Deterministic workloads in <code>demo/</code>, each mapped to an expected
+  result in <code>demo/expected-findings.yaml</code>. Each workload shows its intended behaviour
+  in Prometheus." — <b>met</b>, verified twice (once immediately after deployment, once 4.5 hours
+  later — see §8).</div>
+</section>
+
+<!-- ============================ 2 ============================ -->
+<section class="pb">
+  <h2>2. Design decision: agnhost only, not stress-ng/busybox</h2>
+  <p>The original design (docs/requirements.md, written in Phase 0) specified
+  <code>ghcr.io/colinianking/stress-ng</code> for CPU/memory load and
+  <code>docker.io/library/busybox:1.37</code> for the crash-loop scenario. Neither was ever
+  actually pulled or tested — they were only checked for <i>existence</i> in a registry.</p>
+  <p>Phase 1's labs, by contrast, proved that <code>registry.k8s.io/e2e-test-images/agnhost:2.53</code>
+  and <code>resource-consumer:1.15.0</code> work exactly as needed, and — because both images were
+  already used in Phase 1 — <b>both were already cached on the kind node</b>. Phase 2 was built
+  entirely on these two images. Result: <b>zero new image pulls</b> for the whole demo namespace.</p>
+  <table>
+    <tr><th>Need</th><th>Original plan</th><th>What was actually used</th><th>Why switched</th></tr>
+    <tr><td>CPU/memory load</td><td>stress-ng (never tested)</td><td>agnhost <code>stress</code> subcommand (proven in Phase 1 Lab 03: exact OOM recipe)</td><td>Already verified behaviour; already cached</td></tr>
+    <tr><td>Fractional/duty-cycled CPU</td><td>stress-ng <code>--cpu-load</code> (approximate under cgroup limits, per the original design notes)</td><td>Hand-rolled shell duty cycle using agnhost's built-in <code>busybox</code> tools (<code>timeout</code>, <code>yes</code>)</td><td>Precise and throttle-free — see §3</td></tr>
+    <tr><td>Crash loop</td><td>busybox <code>exit 1</code></td><td>agnhost <code>/bin/sh -c "exit 1"</code></td><td>agnhost's shell was confirmed present in Phase 1 Lab 02 (Alpine-based, has sh/bash/curl/wget/busybox)</td></tr>
+    <tr><td>HPA-coupled fixture</td><td>copy of the over-requested fixture + HPA</td><td>resource-consumer + Service + HPA (same shape proven end-to-end in Phase 1 Lab 05)</td><td>Reused a mechanism already proven to actually trigger a real scale event</td></tr>
+  </table>
+  <div class="box key"><b>Why this matters.</b> Every mechanism in Phase 2's fixtures had already
+  been individually proven correct in Phase 1's labs before being reused here. Nothing in Phase 2
+  depended on an untested assumption about how an image behaves under Kubernetes.</div>
+</section>
+
+<!-- ============================ 3 ============================ -->
+<section class="pb">
+  <h2>3. The duty-cycle technique</h2>
+  <p>Several fixtures need a <i>specific, known, non-throttled</i> fraction of a CPU core — not
+  "as much as possible" and not "capped by a limit" (a limit would trigger real cgroup throttling,
+  which R001's over-provisioned rule explicitly excludes via its "throttled ratio &lt; 5%" guard —
+  see docs/requirements.md §3). agnhost's <code>--cpus</code> flag only supports whole CPUs, so it
+  cannot produce e.g. "5% of one core" directly.</p>
+  <p>Instead, each CPU-load fixture runs a small shell loop that alternates between a real,
+  full-intensity busy period and an idle sleep:</p>
+<pre><code>while true; do timeout &lt;busy-seconds&gt; yes >/dev/null; sleep &lt;idle-seconds&gt;; done</code></pre>
+  <p><code>yes</code> is a standard, well-understood single-core CPU burner — it writes continuously
+  in one process with negligible per-iteration overhead, so during its window it saturates close to
+  100% of one logical core. <code>timeout</code> then kills it after the busy window, and
+  <code>sleep</code> holds idle for the rest of the period. The <b>busy-seconds ÷ (busy+idle)
+  seconds</b> ratio is the target fraction of one core, in millicores relative to 1000m.</p>
+  <table>
+    <tr><th>Fixture</th><th>Pattern</th><th>Target duty</th><th>Target usage</th></tr>
+    <tr><td>right-sized</td><td>busy 4s / idle 6s</td><td>40%</td><td>~400m of a 500m request</td></tr>
+    <tr><td>cpu-over-requested</td><td>busy 1s / idle 19s</td><td>5%</td><td>~50m of a 1000m request</td></tr>
+    <tr><td>cpu-spike</td><td>busy 30s / idle 270s</td><td>10% overall, but 100% during the burst</td><td>0m idle → ~1000m burst</td></tr>
+  </table>
+  <p><b>Verification of the technique itself</b> (before trusting any fixture built on it):
+  <code>timeout</code> and <code>yes</code> were confirmed present inside the agnhost image by
+  running <code>command -v timeout</code> / <code>command -v yes</code> in a live pod before any
+  manifest was written. <code>busybox date</code> was checked too and found to lack nanosecond
+  resolution (<code>%N</code> unsupported) — ruled out as a timing mechanism, which is why
+  <code>timeout</code>+<code>yes</code> was chosen over a hand-timed busy loop.</p>
+  <p class="small muted">Memory-only fixtures use agnhost's own <code>stress --mem-total=&lt;X&gt;
+  --mem-alloc-size=1Mi --mem-alloc-sleep=&lt;N&gt;</code> directly (no shell wrapper needed) — this
+  is the exact recipe already proven in Phase 1 Lab 03's OOM test, just tuned to different totals.
+  Fixtures needing <i>both</i> CPU duty-cycling and a memory hold background the agnhost stress
+  process (<code>&amp;</code>) alongside the foreground CPU loop, sharing one container's cgroup.</p>
+</section>
+
+<!-- ============================ 4 ============================ -->
+<section class="pb">
+  <h2>4. The nine fixtures, one by one</h2>
+  <p>Namespace <code>demo</code>, applied as one unit: <code>kubectl apply -k demo/</code>. Every
+  object carries the label <code>k8sa.dev/scenario=&lt;name&gt;</code>.</p>
+
+  <h3>4.1 right-sized — negative control</h3>
+  <p><b>Purpose:</b> prove R001/R002 do <i>not</i> fire on a workload whose usage genuinely tracks
+  its request. Without this, a rule that always fires would look correct against the other eight
+  fixtures.</p>
+<pre><code>args:
+  - |
+    /agnhost stress --cpus=0 --mem-total=60Mi --mem-alloc-size=1Mi --mem-alloc-sleep=2s &
+    while true; do timeout 4 yes >/dev/null; sleep 6; done
+resources:
+  requests: {cpu: 500m, memory: 128Mi}
+  limits: {memory: 256Mi}</code></pre>
+  <p><b>Result:</b> CPU settled 320–460m (64–92% of the 500m request); memory steady ~65–70Mi
+  (51–55% of the 128Mi request). Both stay above R001/R002's "&lt;50% of request" threshold, so
+  neither rule should fire.</p>
+
+  <h3>4.2 cpu-over-requested</h3>
+  <p><b>Purpose:</b> a clean R001 signal — real, sustained, low usage against a much larger
+  request, with no CPU limit (so no throttling to trigger R001's guard).</p>
+<pre><code>args: ["while true; do timeout 1 yes >/dev/null; sleep 19; done"]
+resources: {requests: {cpu: 1000m, memory: 64Mi}, limits: {memory: 128Mi}}</code></pre>
+  <p><b>Result:</b> <code>rate(container_cpu_usage_seconds_total[2m])</code> ≈ 55–83m — 5.5–8.3% of
+  the 1000m request, well under the 50% threshold.</p>
+
+  <h3>4.3 memory-over-requested</h3>
+<pre><code>args: ["stress", "--cpus=0", "--mem-total=50Mi", "--mem-alloc-size=1Mi", "--mem-alloc-sleep=5ms"]
+resources: {requests: {cpu: 100m, memory: 1Gi}, limits: {memory: 1Gi}}</code></pre>
+  <p><b>Result:</b> working set steady at ~57–60Mi against a 1Gi request (~5.7%). Limit kept equal
+  to the request (generous, 1Gi) specifically so this fixture can <i>never</i> OOM — it must stay a
+  pure resource finding (R002), never accidentally trip a health finding (R004).</p>
+
+  <h3>4.4 cpu-spike — the bursty guard</h3>
+  <p><b>Purpose:</b> a workload that is idle 90% of the time but genuinely saturates a full core
+  for 30 seconds every 5 minutes. Its long-run average looks like classic over-provisioning, but a
+  naive rule would be wrong to say so with high confidence — the docs/requirements.md "bursty"
+  exception (p99/p50 &gt; 4 → cap confidence at LOW) exists specifically for this shape.</p>
+<pre><code>args: ["while true; do timeout 30 yes >/dev/null; sleep 270; done"]
+resources: {requests: {cpu: 500m, memory: 64Mi}, limits: {memory: 128Mi}}</code></pre>
+  <p><b>Result:</b> polled every 15s across a full 5-minute cycle — 0m for six consecutive samples
+  (90s), then <b>319m</b>, then <b>999m</b> two samples later, confirming a real full-core burst was
+  caught live, not just inferred from the manifest.</p>
+
+  <h3>4.5 oom — real out-of-memory kill</h3>
+<pre><code>args: ["stress", "--mem-total=200Mi", "--mem-alloc-size=1Mi", "--mem-alloc-sleep=10ms"]
+resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 128Mi}}</code></pre>
+  <p><b>Result:</b> <code>lastState.terminated</code> = <code>reason: OOMKilled, exitCode: 137</code>,
+  5 restarts at first check, climbing to 36 over 4.5 hours as kubelet backoff widened toward its
+  5-minute cap. Exact recipe reused from Phase 1 Lab 03, where this same request/limit/allocation
+  combination was first proven to reliably OOM.</p>
+
+  <h3>4.6 crashloop</h3>
+<pre><code>command: ["/bin/sh", "-c", "exit 1"]
+resources: {requests: {cpu: 50m, memory: 32Mi}, limits: {memory: 64Mi}}</code></pre>
+  <p><b>Result:</b> <code>reason: Error, exitCode: 1</code>, pod status <code>CrashLoopBackOff</code>.
+  Deliberately distinct from the OOM fixture's termination reason — this is what proves R004 (OOM)
+  must key off <code>reason=OOMKilled</code> specifically and not fire on every crash loop.</p>
+
+  <h3>4.7 hpa-coupled</h3>
+<pre><code>image: registry.k8s.io/e2e-test-images/resource-consumer:1.15.0
+resources: {requests: {cpu: 400m, memory: 64Mi}, limits: {cpu: "1", memory: 128Mi}}
+---
+# Service + HorizontalPodAutoscaler (target: cpu Utilization 70%, min 1, max 5)</code></pre>
+  <p><b>Deliberately no load driver.</b> Unlike Phase 1 Lab 05 (which drove real load to prove the
+  HPA actually rescales), this fixture only needs the HPA <i>object</i> to exist, sitting idle. The
+  behaviour under test in Phase 4 is the rule engine's ability to <i>detect</i> the HPA and switch
+  to the "HPA-coupled" caveat instead of a plain resize — the actual scaling mechanics were already
+  proven separately, so re-driving load here would only add cost without adding new proof.</p>
+  <p><b>Result:</b> idle at ~0m CPU / ~5.4Mi memory against a 400m/64Mi request (which, read naively,
+  would be the strongest over-provisioning signal of any fixture). <code>kube_horizontalpodautoscaler_info</code>
+  confirmed present, target metric <code>cpu Utilization 70</code>.</p>
+
+  <h3>4.8 new-workload — the R005 data-quality gate</h3>
+<pre><code>args: ["pause"]
+resources: {requests: {cpu: 100m, memory: 32Mi}, limits: {memory: 64Mi}}</code></pre>
+  <p><b>Purpose:</b> prove R005 (insufficient data) suppresses R001/R002 rather than letting them
+  guess from a too-short window. Deployed at the same time as the other eight — its "newness" needs
+  no special timing, since any rule requiring more history than the fixture's actual age must gate
+  to <code>insufficient</code> regardless of when it was created.</p>
+  <p><b>Result:</b> idle (~6.5Mi memory, negligible CPU), age well under any of R001/R002's
+  minimum-data windows at check time.</p>
+
+  <h3>4.9 pending — unschedulable</h3>
+<pre><code>args: ["pause"]
+resources: {requests: {cpu: "64"}}</code></pre>
+  <p><b>Result:</b> pod stuck <code>Pending</code>;
+  <code>FailedScheduling: 0/1 nodes are available: 1 Insufficient cpu</code>. No MVP rule consumes
+  this yet — kept for the backlog scheduling-health rule and for testing that the dashboard handles
+  a workload with zero usage data at all.</p>
+</section>
+
+<!-- ============================ 5 ============================ -->
+<section class="pb">
+  <h2>5. demo/expected-findings.yaml</h2>
+  <p>A single YAML file records the ground truth for all nine fixtures — the mechanism, the actual
+  measured behaviour, and which rules must (or must not) fire. This is what the Phase 4 integration
+  test will diff the analyzer's real output against.</p>
+<pre><code>scenarios:
+  - name: cpu-over-requested
+    workload: {kind: Deployment, name: cpu-over-requested}
+    request: {cpu: 1000m, memory: 64Mi}
+    observed: {cpu: "26-83m (avg ~55m via rate(...[2m]))", memory: "~0.6Mi"}
+    mechanism: "5% CPU duty cycle (busy 1s / idle 19s), no CPU limit (throttled ratio ~0%)"
+    expect:
+      rules_fired: [R001]
+      confidence: MEDIUM
+      caveats: []</code></pre>
+  <p>Every entry follows this shape: <code>workload</code>, <code>request</code>,
+  <code>observed</code> (the actual measured numbers, captured live), <code>mechanism</code> (plain
+  English), and <code>expect</code> (rules_fired, confidence, caveats, and free-text notes flagging
+  what a wrong result would mean). Ranges are used deliberately, not exact numbers — duty-cycled
+  workloads vary run to run, and the file says so explicitly at the top.</p>
+</section>
+
+<!-- ============================ 6 ============================ -->
+<section class="pb">
+  <h2>6. Verification method</h2>
+  <p>Every fixture's behaviour was confirmed two different ways, deliberately not relying on either
+  alone:</p>
+  <ol>
+    <li><b><code>kubectl</code> pod/event inspection</b> — pod status, container
+    <code>lastState</code>, and scheduling events. This is what proves the <i>mechanism</i> worked
+    (e.g. the kernel really did OOM-kill the container).</li>
+    <li><b>Live PromQL queries against the running Prometheus</b>, via the API server's service
+    proxy (no port-forward needed to stay open):</li>
+  </ol>
+<pre><code>P=/api/v1/namespaces/monitoring/services/kps-kube-prometheus-stack-prometheus:9090/proxy/api/v1
+kubectl get --raw "$P/query?query=&lt;url-encoded PromQL&gt;"</code></pre>
+  <p>This second step matters: it is not enough that the <i>cluster</i> behaves correctly — the
+  data has to actually reach Prometheus, with the right labels, in a form the rule engine can query.
+  A fixture that behaves correctly in <code>kubectl get pods</code> but whose metrics never reach
+  Prometheus (wrong namespace, missing scrape target, label mismatch) would be silently useless to
+  Phase 4. Both checks were run for every fixture; §7 shows the actual query results.</p>
+</section>
+
+<!-- ============================ 7 ============================ -->
+<section class="pb">
+  <h2>7. Live verification results (2026-09-25, ~10 min after deploy)</h2>
+  <table>
+    <tr><th>Metric</th><th>Query</th><th>Result</th></tr>
+    <tr><td>Requests registered</td><td><code>kube_pod_container_resource_requests{namespace="demo",resource="cpu"}</code></td><td>All 9 pods present with correct request values (0.05–64 cores)</td></tr>
+    <tr><td>Restarts</td><td><code>kube_pod_container_status_restarts_total{namespace="demo"}</code></td><td><code>crashloop</code>=5, <code>oom</code>=5, all others=0</td></tr>
+    <tr><td>Termination reasons</td><td><code>kube_pod_container_status_last_terminated_reason{namespace="demo"} == 1</code></td><td><code>crashloop</code> only (reason present); <code>oom</code> only (reason present) — confirmed distinct reasons via pod inspection (Error vs OOMKilled)</td></tr>
+    <tr><td>Unschedulable</td><td><code>kube_pod_status_unschedulable{namespace="demo"}</code></td><td><code>pending</code>=1, only entry</td></tr>
+    <tr><td>HPA object</td><td><code>kube_horizontalpodautoscaler_info{namespace="demo"}</code></td><td>1 series: <code>hpa-coupled → Deployment/hpa-coupled</code></td></tr>
+    <tr><td>CPU usage rate</td><td><code>rate(container_cpu_usage_seconds_total{namespace="demo",container="c"}[2m])</code></td><td>right-sized 0.404 (404m); cpu-over-requested 0.058 (58m); cpu-spike 0.284 (284m, caught mid-transition); new-workload 0.00007 (~0m)</td></tr>
+    <tr><td>Memory working set</td><td><code>container_memory_working_set_bytes{namespace="demo",container="c"}</code></td><td>right-sized 71.0MB; memory-over-requested 59.9MB; hpa-coupled 5.7MB; new-workload 6.6MB; cpu-over-requested 0.6MB; cpu-spike 0.4MB</td></tr>
+  </table>
+  <div class="box key"><b>All 9 scenarios verified through real Prometheus data, not just
+  <code>kubectl top</code> snapshots</b> — <code>kubectl top</code> only reflects the latest
+  metrics-server sample (no history); the numbers above come from PromQL rate/instant queries
+  against actual scraped time series, which is the same data path the analyzer's rule engine will
+  use.</div>
+</section>
+
+<!-- ============================ 8 ============================ -->
+<section class="pb">
+  <h2>8. Re-verification 4.5 hours later</h2>
+  <p>Before closing Phase 2, everything was checked again independently — not just trusted from the
+  first pass — to confirm the fixtures are <i>stable</i> over time, not just correct at the moment
+  of creation.</p>
+  <table>
+    <tr><th>Check</th><th>First check (~10 min)</th><th>Re-check (4.5 h later)</th></tr>
+    <tr><td>Node</td><td>Ready</td><td>Ready, uptime 16h, no reboot gap</td></tr>
+    <tr><td><code>crashloop</code> restarts</td><td>5</td><td>37 (backoff widening toward the 5-min cap, as expected)</td></tr>
+    <tr><td><code>oom</code> status</td><td>OOMKilled, 5 restarts</td><td>CrashLoopBackOff, 36 restarts, still OOMKilled</td></tr>
+    <tr><td><code>pending</code></td><td>Pending, Insufficient cpu</td><td>Still Pending, same reason</td></tr>
+    <tr><td>Prometheus data freshness</td><td>—</td><td>Last kubelet scrape 4.5s old — no gap</td></tr>
+    <tr><td>Active series</td><td>15,472 (end of Phase 1)</td><td>15,462 (stable, demo namespace's ~17 series balanced by some Phase-1 lab series expiring)</td></tr>
+    <tr><td>Prometheus PVC size</td><td>12 MB (end of Phase 1)</td><td>75 MB</td></tr>
+    <tr><td>GitHub</td><td>—</td><td>All 5 PRs merged; local <code>main</code> in sync; no stray branches</td></tr>
+  </table>
+  <p>Nothing had drifted or gone stale. This re-check is what the answer to "is Phase 2 completely
+  finished?" was actually based on — re-running the verification queries live rather than repeating
+  the earlier claim from memory.</p>
+</section>
+
+<!-- ============================ 9 ============================ -->
+<section class="pb">
+  <h2>9. What Phase 2 confirms for the rule engine (R001–R005)</h2>
+  <table>
+    <tr><th>Fixture evidence</th><th>Design consequence for Phase 4</th></tr>
+    <tr><td><code>right-sized</code> stays above both 50% thresholds</td><td>R001/R002's core threshold logic has a working negative control to test against — a rule engine that always fires would fail this fixture specifically</td></tr>
+    <tr><td><code>cpu-over-requested</code> at 5.5–8.3% of request, zero throttling</td><td>A clean positive case for R001 with no confounding guard active</td></tr>
+    <tr><td><code>cpu-spike</code> caught bursting to 999m after long idle</td><td>Concrete data to compute p99/p50 against — the bursty guard has a real fixture, not just a described one</td></tr>
+    <tr><td><code>oom</code> vs <code>crashloop</code> have different termination reasons (<code>OOMKilled</code> vs <code>Error</code>), same restart pattern</td><td>Proves R004 must branch on <code>reason</code>, not just "did it restart" — reusing R003's restart signal alone would conflate the two</td></tr>
+    <tr><td><code>hpa-coupled</code> looks like the strongest over-provisioning case by raw ratio, but has a real HPA object</td><td>R001 needs an explicit HPA-detection step before emitting a resize; this fixture is a trap for a rule that skips that check</td></tr>
+    <tr><td><code>new-workload</code> is deployed with the others but has R005-relevant "youth" regardless of window length</td><td>R005 must gate on data window length against each rule's own minimum, not on wall-clock creation time</td></tr>
+    <tr><td><code>pending</code> has zero usage data (never scheduled)</td><td>Confirms the dashboard/rule engine must handle a workload with no metrics at all, not just sparse ones</td></tr>
+  </table>
+</section>
+
+<!-- ============================ 10 ============================ -->
+<section class="pb">
+  <h2>10. Resource footprint</h2>
+  <table>
+    <tr><th>Item</th><th>Value</th><th>Label</th></tr>
+    <tr><td>New image pulls</td><td>0 (both images already cached from Phase 1)</td><td><span class="tag m">MEASURED</span></td></tr>
+    <tr><td>Node container memory</td><td>2.32–2.64 GiB (up from ~2.2 GiB at end of Phase 1)</td><td><span class="tag m">MEASURED</span></td></tr>
+    <tr><td>Host available memory</td><td>7.2–8.0 GiB throughout</td><td><span class="tag m">MEASURED</span></td></tr>
+    <tr><td>Peak combined demo CPU</td><td>&lt; 1.5 cores (only #2's duty cycle and #4's burst can briefly overlap); steady-state well under 1 core</td><td><span class="tag e">ESTIMATED</span></td></tr>
+    <tr><td>Prometheus active series</td><td>15,462 (stable; demo added ~17, offset by Phase-1 lab series expiring)</td><td><span class="tag m">MEASURED</span></td></tr>
+    <tr><td>Prometheus PVC</td><td>75 MB, well under the 5GB retention cap</td><td><span class="tag m">MEASURED</span></td></tr>
+  </table>
+</section>
+
+<!-- ============================ 11 ============================ -->
+<section class="pb">
+  <h2>11. Git and GitHub workflow</h2>
+  <table>
+    <tr><th>Commit</th><th>Content</th></tr>
+    <tr><td><code>1c56dbb</code></td><td>Merge of PR #4 — 6 ADRs (D-001,002,003,005,006,007) with Phase 1 evidence</td></tr>
+    <tr><td><code>310f567</code></td><td>Phase 2: 9 demo workloads, ground truth, doc updates</td></tr>
+    <tr><td><code>6570169</code></td><td>Merge of PR #5 — current <code>main</code></td></tr>
+  </table>
+  <p>Same conventions as Phase 1: work on a branch (<code>phase-2</code>), stage files by name,
+  scan for secrets before staging, Conventional-Commit messages, merge via a merge commit, delete
+  the branch both locally and on GitHub once merged.</p>
+<pre><code>git switch -c phase-2
+grep -riE 'password|secret|token|BEGIN .*KEY' demo/   # scan before staging
+git add demo/ PHASES.md docs/requirements.md
+git commit -m "feat(phase-2): demo workloads, verified against live Prometheus"
+git push -u origin phase-2
+gh pr create --base main --head phase-2 --title "..." --body "..."
+gh api -X PUT repos/ISHANT57/kubernetes-workload-analyzer/pulls/5/merge -f merge_method=merge
+git switch main && git pull --ff-only
+git branch -d phase-2 && git push origin --delete phase-2</code></pre>
+</section>
+
+<!-- ============================ 12 ============================ -->
+<section>
+  <h2>12. Current state, operating and rollback</h2>
+  <h3>12.1 State at 2026-09-25 13:53 <span class="tag m">MEASURED</span></h3>
+  <table>
+    <tr><th>Namespace</th><th>Running</th></tr>
+    <tr><td>demo</td><td>9 Deployments (7 Running, <code>crashloop</code> and <code>oom</code> cycling in CrashLoopBackOff by design, <code>pending</code> Unschedulable by design), 1 Service, 1 HPA</td></tr>
+  </table>
+  <h3>12.2 Operating</h3>
+<pre><code>kubectl config use-context kind-workload-analyzer
+kubectl -n demo get pods -o wide
+kubectl -n demo get hpa hpa-coupled
+P=/api/v1/namespaces/monitoring/services/kps-kube-prometheus-stack-prometheus:9090/proxy/api/v1
+kubectl get --raw "$P/query?query=kube_pod_container_resource_requests%7Bnamespace%3D%22demo%22%7D"</code></pre>
+  <h3>12.3 Rollback / removal</h3>
+<pre><code>kubectl delete -k demo/          # removes all 9 workloads, the Service and the HPA
+kubectl delete namespace demo    # equivalent, coarser</code></pre>
+</section>
+
+<!-- ============================ 13 ============================ -->
+<section class="pb">
+  <h2>13. Open items and next phase</h2>
+  <table>
+    <tr><th>Item</th><th>Status</th></tr>
+    <tr><td>D-004 (no application database) ADR</td><td>Still PROPOSED — deferred until accepted</td></tr>
+    <tr><td>Cluster recovery after Docker restart / reboot</td><td>Still deferred to Phase 7 (untested for 16h+ of continuous uptime so far)</td></tr>
+    <tr><td>Series count re-check</td><td>Worth a periodic glance as more phases add scrape targets, but 15.5k against the stack's practical headroom leaves ample margin</td></tr>
+    <tr><td>Phase 3 — backend skeleton</td><td>Next: Go module — config, Prometheus client, Kubernetes client (D-007 ClusterRole scope), analysis-run object, <code>/healthz</code>/<code>/readyz</code>/<code>/metrics</code>, structured logs. No rule logic yet.</td></tr>
+  </table>
+  <p>Phase 2 leaves Phase 3 with a cluster that already has real, varied, labelled Prometheus data
+  to query from the very first line of backend code — no synthetic fixtures will be needed to
+  exercise the Prometheus client.</p>
+</section>
+
+<!-- ============================ APPENDIX A ============================ -->
+<section class="pb">
+  <h2>Appendix A — Manifest reference</h2>
+  <table class="small">
+    <tr><th>File</th><th>Object(s)</th><th>Lines</th></tr>
+    <tr><td><code>demo/00-namespace.yaml</code></td><td>Namespace <code>demo</code></td><td>5</td></tr>
+    <tr><td><code>demo/01-right-sized.yaml</code></td><td>Deployment</td><td>23</td></tr>
+    <tr><td><code>demo/02-cpu-over-requested.yaml</code></td><td>Deployment</td><td>19</td></tr>
+    <tr><td><code>demo/03-memory-over-requested.yaml</code></td><td>Deployment</td><td>18</td></tr>
+    <tr><td><code>demo/04-cpu-spike.yaml</code></td><td>Deployment</td><td>20</td></tr>
+    <tr><td><code>demo/05-oom.yaml</code></td><td>Deployment</td><td>19</td></tr>
+    <tr><td><code>demo/06-crashloop.yaml</code></td><td>Deployment</td><td>17</td></tr>
+    <tr><td><code>demo/07-hpa-coupled.yaml</code></td><td>Deployment + Service + HPA</td><td>38</td></tr>
+    <tr><td><code>demo/08-new-workload.yaml</code></td><td>Deployment</td><td>19</td></tr>
+    <tr><td><code>demo/09-pending.yaml</code></td><td>Deployment</td><td>17</td></tr>
+    <tr><td><code>demo/expected-findings.yaml</code></td><td>Ground truth for all 9 scenarios</td><td>113</td></tr>
+    <tr><td><code>demo/kustomization.yaml</code></td><td>Applies all of the above as one unit</td><td>13</td></tr>
+  </table>
+  <p>All Deployments carry <code>replicas: 1</code> and the label
+  <code>k8sa.dev/scenario=&lt;name&gt;</code> on both the Deployment and its pod template.</p>
+</section>
+
+<!-- ============================ APPENDIX B ============================ -->
+<section class="pb">
+  <h2>Appendix B — Verification query reference</h2>
+  <table class="small">
+    <tr><th>Question</th><th>Query</th></tr>
+    <tr><td>Are requests registered?</td><td><code>kube_pod_container_resource_requests{namespace="demo",resource="cpu"}</code></td></tr>
+    <tr><td>Restart counts</td><td><code>kube_pod_container_status_restarts_total{namespace="demo"}</code></td></tr>
+    <tr><td>Why did a container last stop?</td><td><code>kube_pod_container_status_last_terminated_reason{namespace="demo"} == 1</code></td></tr>
+    <tr><td>Is a pod unschedulable?</td><td><code>kube_pod_status_unschedulable{namespace="demo"}</code></td></tr>
+    <tr><td>Does an HPA exist for this workload?</td><td><code>kube_horizontalpodautoscaler_info{namespace="demo"}</code></td></tr>
+    <tr><td>CPU usage rate</td><td><code>rate(container_cpu_usage_seconds_total{namespace="demo",container="c"}[2m])</code></td></tr>
+    <tr><td>Current memory working set</td><td><code>container_memory_working_set_bytes{namespace="demo",container="c"}</code></td></tr>
+    <tr><td>Query via API-server proxy (no lingering port-forward)</td><td><code>kubectl get --raw "/api/v1/namespaces/monitoring/services/kps-kube-prometheus-stack-prometheus:9090/proxy/api/v1/query?query=&lt;url-encoded&gt;"</code></td></tr>
+    <tr><td>Pod-level termination detail</td><td><code>kubectl -n demo get pod &lt;p&gt; -o jsonpath='{.status.containerStatuses[0].lastState}'</code></td></tr>
+    <tr><td>Scheduling failure reason</td><td><code>kubectl -n demo get events --field-selector reason=FailedScheduling</code></td></tr>
+    <tr><td>Live usage snapshot (no history)</td><td><code>kubectl -n demo top pods</code></td></tr>
+  </table>
+</section>
+
+</body>
+</html>

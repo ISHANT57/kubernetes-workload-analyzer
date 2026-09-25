@@ -31,6 +31,10 @@ coverage/
 *.test
 *.prof
 
+# --- Go (backend/) ---
+backend/analyzer
+backend/cmd/*/*.exe
+
 # --- Language tooling (whichever runtime is chosen) ---
 vendor/
 __pycache__/

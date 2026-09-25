@@ -1,7 +1,7 @@
 # Kubernetes Workload Analyzer
 
-> **Status:** Phase 0 (foundation) done. Phase 1 (kind cluster + fundamentals + monitoring) next.
-> No application code yet. See [PHASES.md](PHASES.md).
+> **Status:** Phases 0–3 done (foundation, Kubernetes fundamentals + monitoring, demo workloads,
+> backend skeleton). Phase 4 (findings R001–R005) next. See [PHASES.md](PHASES.md).
 
 A portfolio project that observes a Kubernetes cluster, analyzes real workload, resource and
 reliability metrics, and turns them into **evidence-based findings** shown in a custom dashboard.
@@ -75,8 +75,21 @@ helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
 kubectl -n monitoring port-forward svc/kps-grafana 3000:80   # Grafana on localhost only
 ```
 
+Optionally apply the demo workloads (Phase 2) so there is something interesting to look at:
+```bash
+kubectl apply -k demo/
+```
+
+Run the backend (Phase 3; no rule engine yet, see [backend/README.md](backend/README.md)):
+```bash
+kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090 &
+cd backend && CLUSTER_ID=workload-analyzer KUBE_CONTEXT=kind-workload-analyzer go run ./cmd/analyzer
+# curl localhost:8080/healthz, /readyz, /api/runs/latest, /metrics
+```
+
 Measured footprint and verification results: [docs/architecture.md](docs/architecture.md).
 Hands-on lab notes: [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamentals.md).
+Phase write-ups (PDF): [docs/reports/](docs/reports/).
 
 ## Limitations (known now)
 
@@ -92,5 +105,8 @@ Hands-on lab notes: [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamenta
 - [AGENTS.md](AGENTS.md) — rules for AI-assisted development
 - [docs/requirements.md](docs/requirements.md) — MVP, metrics, rules, cost model, demo workloads, findings contract
 - [docs/architecture.md](docs/architecture.md) — architecture, failure behaviour, dependencies
-- [docs/DECISIONS.md](docs/DECISIONS.md) — decisions and their status
+- [docs/DECISIONS.md](docs/DECISIONS.md) — decisions and their status, linking to [docs/decisions/](docs/decisions/) ADRs
 - [docs/threat-model.md](docs/threat-model.md) — threats and permissions
+- [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamentals.md) — hands-on lab notes (Phase 1)
+- [backend/README.md](backend/README.md) — running and testing the Go backend (Phase 3)
+- [docs/reports/](docs/reports/) — per-phase PDF write-ups

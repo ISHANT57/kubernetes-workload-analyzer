@@ -2,7 +2,10 @@
 
 Status values: **PROPOSED** (recommendation, not decided) · **ACCEPTED** (owner decided) ·
 **SUPERSEDED**. Accepted decisions get a full ADR in `docs/decisions/ADR-NNN-*.md` after Phase 1,
-so the ADRs can cite measured evidence.
+so the ADRs can cite measured evidence. Written 2026-09-25: [ADR-001](decisions/ADR-001-backend-language.md),
+[ADR-002](decisions/ADR-002-dashboard.md), [ADR-003](decisions/ADR-003-metrics-source.md),
+[ADR-005](decisions/ADR-005-local-cluster.md), [ADR-006](decisions/ADR-006-positioning.md),
+[ADR-007](decisions/ADR-007-k8s-api-scope.md). ADR-004 is deferred until D-004 is accepted.
 
 | ID | Decision | Choice | Status |
 |---|---|---|---|
@@ -16,7 +19,8 @@ so the ADRs can cite measured evidence.
 
 ---
 
-## D-001 Backend language
+## D-001 Backend language  
+*Full ADR: [decisions/ADR-001-backend-language.md](decisions/ADR-001-backend-language.md)*
 **Problem:** Choose the language for the monolith (Prometheus client, Kubernetes client, rules, cost, HTTP API).
 
 | Option | For | Against |
@@ -28,7 +32,8 @@ so the ADRs can cite measured evidence.
 **Decision:** Go. client-go `master` requires `go 1.27.0`; with `GOTOOLCHAIN=auto` the toolchain is
 fetched automatically, but installing 1.27 directly avoids confusion. · **Status: ACCEPTED 2026-09-24**
 
-## D-002 Dashboard approach
+## D-002 Dashboard approach  
+*Full ADR: [decisions/ADR-002-dashboard.md](decisions/ADR-002-dashboard.md)*
 **Problem:** The UI must answer "what is wrong?" first; trend charts are secondary. The project is also a portfolio piece, so a custom UI has value of its own.
 
 | Option | For | Against |
@@ -42,7 +47,8 @@ request with p95/max; restart/OOM timeline). Grafana remains for raw time-series
 browser never talks to Prometheus. Built only after the findings contract and real backend output
 are stable. · **Status: ACCEPTED 2026-09-24**
 
-## D-003 Prometheus from MVP
+## D-003 Prometheus from MVP  
+*Full ADR: [decisions/ADR-003-metrics-source.md](decisions/ADR-003-metrics-source.md)*
 **Problem:** Rightsizing needs history. metrics-server keeps only the latest sample and stores nothing.
 
 | Option | For | Against |
@@ -70,7 +76,8 @@ Options: none · PostgreSQL · SQLite file.
 **Recommendation:** No application database in MVP. Add PostgreSQL when a concrete feature (history,
 acknowledgements, auth) needs it. · **Status: PROPOSED**
 
-## D-005 Local cluster tool
+## D-005 Local cluster tool  
+*Full ADR: [decisions/ADR-005-local-cluster.md](decisions/ADR-005-local-cluster.md)*
 **Problem:** Choose a local cluster for a laptop with ~7 GiB available RAM (measured) and a ~4.5 GiB cluster budget.
 
 | Criterion | kind | k3d | minikube |
@@ -86,7 +93,8 @@ limit; scheduling is demonstrated on one node with taints, nodeSelector and a Pe
 Switch to k3d if available RAM drops below 1.5 GiB after the monitoring stack is installed.
 · **Status: ACCEPTED 2026-09-24**
 
-## D-006 Project positioning
+## D-006 Project positioning  
+*Full ADR: [decisions/ADR-006-positioning.md](decisions/ADR-006-positioning.md)*
 **Problem:** OpenCost, KRR, VPA/Goldilocks and Grafana already cover pieces of this. The README must say why this project exists.
 
 | Option | Pitch | Risk |
@@ -99,7 +107,8 @@ Switch to k3d if available RAM drops below 1.5 GiB after the monitoring stack is
 built around unified, explainable findings. KRR and OpenCost are comparison baselines; the README
 shows where results agree and differ. · **Status: ACCEPTED 2026-09-24**
 
-## D-007 Backend Kubernetes API access
+## D-007 Backend Kubernetes API access  
+*Full ADR: [decisions/ADR-007-k8s-api-scope.md](decisions/ADR-007-k8s-api-scope.md)*
 **Problem:** Metrics come from Prometheus, but the backend also needs workload structure (what owns
 what, HPA targets) and Kubernetes Events, which are not in Prometheus (Events are API objects that
 expire after about an hour by default). The portfolio should also show real API and RBAC use. Pod

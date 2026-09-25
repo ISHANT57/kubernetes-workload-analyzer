@@ -18,6 +18,7 @@ import (
 // be tested with a fake, per AGENTS.md ("External calls ... sit behind interfaces").
 type LatestProvider interface {
 	Latest() *model.AnalysisRun
+	Findings() []model.Finding
 }
 
 // Server serves the analyzer's HTTP endpoints.
@@ -35,6 +36,7 @@ func New(latest LatestProvider, logger *slog.Logger) *Server {
 	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.Handle("GET /metrics", promhttp.Handler())
 	s.mux.HandleFunc("GET /api/runs/latest", s.handleLatestRun)
+	s.mux.HandleFunc("GET /api/findings", s.handleFindings)
 	return s
 }
 
@@ -86,6 +88,17 @@ func (s *Server) handleLatestRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, run)
+}
+
+// handleFindings exposes the current ranked finding list as JSON, per docs/requirements.md §6.
+// Always returns an array, never null, even when there are zero findings -- a JSON consumer
+// (the Phase 5 dashboard) should never need a null-check before iterating this response.
+func (s *Server) handleFindings(w http.ResponseWriter, r *http.Request) {
+	fs := s.latest.Findings()
+	if fs == nil {
+		fs = []model.Finding{}
+	}
+	writeJSON(w, http.StatusOK, fs)
 }
 
 func writeJSON(w http.ResponseWriter, code int, body any) {

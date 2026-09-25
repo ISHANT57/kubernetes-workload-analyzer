@@ -24,6 +24,9 @@ func (f *fakePromClient) Healthy(ctx context.Context) error { return f.healthyEr
 func (f *fakePromClient) QueryInstant(ctx context.Context, query string) (model.Vector, error) {
 	return nil, nil
 }
+func (f *fakePromClient) QueryRange(ctx context.Context, query string, start, end time.Time, step time.Duration) (model.Matrix, error) {
+	return nil, nil
+}
 
 type fakeK8sClient struct {
 	refs    []analyzermodel.WorkloadRef
@@ -45,7 +48,7 @@ func testLogger() *slog.Logger {
 func TestRunOnce_BothHealthy_Complete(t *testing.T) {
 	prom := &fakePromClient{}
 	k8s := &fakeK8sClient{refs: []analyzermodel.WorkloadRef{{Name: "a"}, {Name: "b"}}}
-	r := New("test-cluster", 0, time.Second, time.Second, prom, k8s, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, prom, k8s, nil, testLogger())
 
 	r.runOnce(context.Background())
 
@@ -71,7 +74,7 @@ func TestRunOnce_BothHealthy_Complete(t *testing.T) {
 func TestRunOnce_PrometheusDown(t *testing.T) {
 	prom := &fakePromClient{healthyErr: errors.New("dial tcp: connection refused")}
 	k8s := &fakeK8sClient{refs: []analyzermodel.WorkloadRef{{Name: "a"}}}
-	r := New("test-cluster", 0, time.Second, time.Second, prom, k8s, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, prom, k8s, nil, testLogger())
 
 	r.runOnce(context.Background())
 
@@ -93,7 +96,7 @@ func TestRunOnce_PrometheusDown(t *testing.T) {
 func TestRunOnce_KubernetesDown(t *testing.T) {
 	prom := &fakePromClient{}
 	k8s := &fakeK8sClient{listErr: errors.New("Forbidden")}
-	r := New("test-cluster", 0, time.Second, time.Second, prom, k8s, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, prom, k8s, nil, testLogger())
 
 	r.runOnce(context.Background())
 
@@ -112,7 +115,7 @@ func TestRunOnce_KubernetesDown(t *testing.T) {
 func TestRunOnce_BothDown_Failed(t *testing.T) {
 	prom := &fakePromClient{healthyErr: errors.New("unreachable")}
 	k8s := &fakeK8sClient{listErr: errors.New("unreachable")}
-	r := New("test-cluster", 0, time.Second, time.Second, prom, k8s, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, prom, k8s, nil, testLogger())
 
 	r.runOnce(context.Background())
 
@@ -134,7 +137,7 @@ func TestRunOnce_BothDown_Failed(t *testing.T) {
 func TestLatest_WorkloadsSeenSurvivesAFailedRun(t *testing.T) {
 	prom := &fakePromClient{}
 	k8s := &fakeK8sClient{refs: []analyzermodel.WorkloadRef{{Name: "a"}, {Name: "b"}, {Name: "c"}}}
-	r := New("test-cluster", 0, time.Second, time.Second, prom, k8s, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, prom, k8s, nil, testLogger())
 
 	r.runOnce(context.Background()) // good run
 	firstID := r.Latest().ID
@@ -162,7 +165,7 @@ func TestLatest_WorkloadsSeenSurvivesAFailedRun(t *testing.T) {
 }
 
 func TestLatest_NilBeforeFirstRun(t *testing.T) {
-	r := New("test-cluster", 0, time.Second, time.Second, &fakePromClient{}, &fakeK8sClient{}, testLogger())
+	r := New("test-cluster", 0, time.Second, time.Second, time.Second, &fakePromClient{}, &fakeK8sClient{}, nil, testLogger())
 	if got := r.Latest(); got != nil {
 		t.Errorf("Latest() before any run: got %+v, want nil", got)
 	}

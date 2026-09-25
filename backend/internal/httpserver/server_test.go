@@ -12,10 +12,12 @@ import (
 )
 
 type fakeLatestProvider struct {
-	run *model.AnalysisRun
+	run      *model.AnalysisRun
+	findings []model.Finding
 }
 
 func (f *fakeLatestProvider) Latest() *model.AnalysisRun { return f.run }
+func (f *fakeLatestProvider) Findings() []model.Finding  { return f.findings }
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -104,6 +106,34 @@ func TestLatestRun_ReturnsTheRun(t *testing.T) {
 	}
 	if got.ID != "run-1" || got.WorkloadsSeen != 9 {
 		t.Errorf("decoded run = %+v, want ID=run-1 WorkloadsSeen=9", got)
+	}
+}
+
+func TestFindings_EmptyList_NotNull(t *testing.T) {
+	s := New(&fakeLatestProvider{findings: nil}, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/findings with no findings: status = %d, want 200", rec.Code)
+	}
+	if body := rec.Body.String(); body != "[]\n" {
+		t.Errorf("GET /api/findings body = %q, want \"[]\\n\" (never a bare null)", body)
+	}
+}
+
+func TestFindings_ReturnsTheList(t *testing.T) {
+	fs := []model.Finding{{ID: "f1", RuleID: "R001"}, {ID: "f2", RuleID: "R002"}}
+	s := New(&fakeLatestProvider{findings: fs}, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
+
+	var got []model.Finding
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response body: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != "f1" || got[1].ID != "f2" {
+		t.Errorf("decoded findings = %+v, want 2 findings f1, f2 in order", got)
 	}
 }
 

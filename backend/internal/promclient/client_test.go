@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 // vectorResponse is a minimal, valid Prometheus /api/v1/query response body for a vector result
@@ -98,5 +99,62 @@ func TestQueryInstant_ServerError(t *testing.T) {
 	}
 	if _, err := c.QueryInstant(context.Background(), "up"); err == nil {
 		t.Error("QueryInstant() against a 500-returning server: want error, got nil")
+	}
+}
+
+const matrixResponse = `{
+  "status": "success",
+  "data": {
+    "resultType": "matrix",
+    "result": [
+      {"metric": {"pod": "right-sized-abc"}, "values": [[1700000000, "0.4"], [1700000030, "0.42"], [1700000060, "0.39"]]}
+    ]
+  }
+}`
+
+func TestQueryRange_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, matrixResponse)
+	}))
+	defer srv.Close()
+
+	c, err := New(srv.URL)
+	if err != nil {
+		t.Fatalf("New(%q): unexpected error: %v", srv.URL, err)
+	}
+
+	end := time.Now()
+	start := end.Add(-1 * time.Hour)
+	matrix, err := c.QueryRange(context.Background(), `rate(container_cpu_usage_seconds_total[5m])`, start, end, 30*time.Second)
+	if err != nil {
+		t.Fatalf("QueryRange(): unexpected error: %v", err)
+	}
+	if len(matrix) != 1 {
+		t.Fatalf("QueryRange(): got %d series, want 1", len(matrix))
+	}
+	if len(matrix[0].Values) != 3 {
+		t.Errorf("QueryRange(): got %d samples, want 3", len(matrix[0].Values))
+	}
+}
+
+func TestQueryRange_WrongResultType(t *testing.T) {
+	// A range query that somehow gets back a vector (not a matrix) must be surfaced as an
+	// error, not silently misinterpreted -- this is the range-query counterpart of
+	// TestQueryInstant's own result-type check.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, vectorResponse)
+	}))
+	defer srv.Close()
+
+	c, err := New(srv.URL)
+	if err != nil {
+		t.Fatalf("New(%q): unexpected error: %v", srv.URL, err)
+	}
+
+	end := time.Now()
+	if _, err := c.QueryRange(context.Background(), "up", end.Add(-time.Hour), end, 30*time.Second); err == nil {
+		t.Error("QueryRange() given a vector-shaped response: want error, got nil")
 	}
 }

@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/config"
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/cost"
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/evidence"
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/findings"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/httpserver"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/k8sclient"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/logging"
@@ -52,13 +55,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Cost pricing is optional: health and rightsizing findings work without it (D-004-adjacent
+	// design; see docs/requirements.md §4). No built-in default price is ever substituted --
+	// findings simply carry no Cost field until CPU_CORE_HOUR_USD/MEMORY_GIB_HOUR_USD are set.
+	pricing, pricingErr := cost.LoadPricing()
+	if pricingErr != nil {
+		logger.Info("cost estimation disabled", "reason", pricingErr)
+	}
+
+	analyzer := &findings.Analyzer{
+		Builder: &evidence.Builder{Prom: promClient},
+		Pricing: pricing,
+		Logger:  logger,
+	}
+
 	analysisRunner := runner.New(
 		model.ClusterID(cfg.ClusterID),
 		cfg.AnalysisInterval,
 		cfg.PrometheusTimeout,
 		cfg.KubernetesTimeout,
+		cfg.AnalysisTimeout,
 		promClient,
 		k8sClient,
+		analyzer,
 		logger,
 	)
 

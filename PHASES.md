@@ -12,7 +12,7 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
 | 5 | Dashboard | React + Vite + TS + uPlot on recorded real output | Overview, Findings, Detail, Workloads, Platform Status pages | DONE |
 | 6 | Grafana integration | Links from findings to Grafana panels | Each resource finding links to its panel | DONE |
 | 7 | Production engineering | Retries, idempotency, partial-failure handling, structured errors, RBAC hardening, in-cluster deploy; tracing only if a need appears | Failure tests pass (Prometheus down, partial query failure, duplicate run, insufficient history) | DONE |
-| 8 | Final demonstration | Scripted demo covering the 8 points of the brief | Demo runbook in `docs/runbook.md` | NOT STARTED |
+| 8 | Final demonstration | Scripted demo covering the 8 points of the brief | Demo runbook in `docs/runbook.md` | DONE |
 
 ## Log
 - 2026-09-23: Environment inspected; git initialized; docs created; decisions proposed.
@@ -88,6 +88,17 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   complete` and `/readyz` 200 on its own, no restart needed. `docs/threat-model.md` and
   `docs/architecture.md` updated with the real in-cluster deployment shape and RBAC verification
   detail.
+- 2026-09-26: Phase 8 done. `docs/runbook.md`: one section per demonstrable success criterion from
+  the original brief (§24 items 1-8), each with real commands run against the actual in-cluster
+  analyzer, not invented output. Writing it surfaced a real, live observation, not a fabricated
+  one: right after the Phase 7 outage test, `demo/cpu-over-requested` and `demo/memory-over-requested`
+  showed `data_quality: insufficient` ("less than 80% coverage over the minimum 30m window") instead
+  of firing R001/R002 -- confirmed via `cmd/verify` -- because the deliberate Prometheus outage had
+  just created a real gap in that window. This is R005 (the data-quality gate) working as designed,
+  not a bug: it self-clears as the gap ages out of the 30-minute lookback. The runbook documents
+  this live rather than papering over it, and the cost-impact section is worked out from the real
+  evidence and the real deployed formula (`internal/findings/findings.go`, `CostHours = 730`)
+  rather than showing a fabricated API response, per AGENTS.md's "never invent metrics" rule.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

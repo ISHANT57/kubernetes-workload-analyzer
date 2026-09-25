@@ -1,0 +1,19 @@
+# R001 (CPU over-requested): ~5% duty cycle (busy 1s / idle 19s) against a 1000m request.
+# No CPU limit, so no throttling -> the throttled-ratio<5% guard in R001 does not suppress it.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cpu-over-requested, namespace: demo, labels: {app: cpu-over-requested, k8sa.dev/scenario: cpu-over-requested}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cpu-over-requested}}
+  template:
+    metadata: {labels: {app: cpu-over-requested, k8sa.dev/scenario: cpu-over-requested}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        command: ["/bin/sh", "-c"]
+        args: ["while true; do timeout 1 yes >/dev/null; sleep 19; done"]
+        resources:
+          requests: {cpu: 1000m, memory: 64Mi}
+          limits: {memory: 128Mi}

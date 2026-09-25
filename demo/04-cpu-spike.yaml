@@ -1,0 +1,20 @@
+# Bursty workload: ~1 core for 30s, then idle for 270s, repeating. Request (500m) sits well
+# below the burst but well above the long-run average -> high p99/p50 ratio. R001 must cap
+# confidence at LOW / attach a "bursty" caveat rather than confidently flagging over-provisioning.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cpu-spike, namespace: demo, labels: {app: cpu-spike, k8sa.dev/scenario: cpu-spike}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: cpu-spike}}
+  template:
+    metadata: {labels: {app: cpu-spike, k8sa.dev/scenario: cpu-spike}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        command: ["/bin/sh", "-c"]
+        args: ["while true; do timeout 30 yes >/dev/null; sleep 270; done"]
+        resources:
+          requests: {cpu: 500m, memory: 64Mi}
+          limits: {memory: 128Mi}

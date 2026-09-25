@@ -1,0 +1,23 @@
+# Negative control: request roughly matches steady usage. Must produce NO R001/R002 finding.
+# CPU: ~40% duty cycle (busy 4s / idle 6s) against a 500m request -> ~400m used.
+# Memory: agnhost stress holds ~60Mi against a 128Mi request, backgrounded alongside the CPU loop.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: right-sized, namespace: demo, labels: {app: right-sized, k8sa.dev/scenario: right-sized}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: right-sized}}
+  template:
+    metadata: {labels: {app: right-sized, k8sa.dev/scenario: right-sized}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            /agnhost stress --cpus=0 --mem-total=60Mi --mem-alloc-size=1Mi --mem-alloc-sleep=2s &
+            while true; do timeout 4 yes >/dev/null; sleep 6; done
+        resources:
+          requests: {cpu: 500m, memory: 128Mi}
+          limits: {memory: 256Mi}

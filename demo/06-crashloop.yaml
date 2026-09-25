@@ -1,0 +1,17 @@
+# R003 (frequent restarts) + CrashLoopBackOff: container exits immediately, every time.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: crashloop, namespace: demo, labels: {app: crashloop, k8sa.dev/scenario: crashloop}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: crashloop}}
+  template:
+    metadata: {labels: {app: crashloop, k8sa.dev/scenario: crashloop}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/agnhost:2.53
+        command: ["/bin/sh", "-c", "exit 1"]
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {memory: 64Mi}

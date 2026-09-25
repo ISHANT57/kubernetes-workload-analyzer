@@ -1,0 +1,38 @@
+# HPA-coupled: a Deployment with a real HPA on CPU utilization, sitting near-idle. R001 must
+# not suggest a plain CPU resize here -- it must emit the HPA-coupled caveat and an HPA-neutral
+# request instead (verified against a real scale event in Phase 1 Lab 05; no load driver needed
+# here since that behaviour is already proven -- this fixture only needs the HPA object to exist).
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: hpa-coupled, namespace: demo, labels: {app: hpa-coupled, k8sa.dev/scenario: hpa-coupled}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: hpa-coupled}}
+  template:
+    metadata: {labels: {app: hpa-coupled, k8sa.dev/scenario: hpa-coupled}}
+    spec:
+      containers:
+      - name: c
+        image: registry.k8s.io/e2e-test-images/resource-consumer:1.15.0
+        ports: [{containerPort: 8080}]
+        resources:
+          requests: {cpu: 400m, memory: 64Mi}
+          limits: {cpu: "1", memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: hpa-coupled, namespace: demo}
+spec:
+  selector: {app: hpa-coupled}
+  ports: [{port: 8080, targetPort: 8080}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: hpa-coupled, namespace: demo}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: hpa-coupled}
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}

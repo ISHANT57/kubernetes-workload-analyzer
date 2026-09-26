@@ -22,7 +22,7 @@ internal/cost/              estimated cost impact -- explicit "Estimated", never
 internal/findings/          orchestrates evidence+rules+cost into a ranked, stably-ID'd list
 internal/runner/            the analysis loop: timer, failure handling, in-memory snapshot
 internal/httpserver/        /healthz /readyz /metrics /api/findings /api/runs/latest
-                             /api/timeseries, and (if STATIC_DIR is set) the built frontend
+                             /api/timeseries /api/clusters, and (if STATIC_DIR is set) the built frontend
 internal/metrics/           the analyzer's own Prometheus metrics (self-observability)
 ```
 
@@ -69,7 +69,22 @@ curl localhost:8080/readyz               # 200 only when the last run was fully 
 curl localhost:8080/api/findings         # the ranked finding list
 curl 'localhost:8080/api/timeseries?namespace=demo&workload=X&container=c&metric=cpu&window=24h'
 curl localhost:8080/metrics | grep ^analyzer_
+curl localhost:8080/api/clusters         # this cluster's ID + any PEER_CLUSTERS (multi-cluster switcher, D-008)
 ```
+
+## Multi-cluster (D-008)
+
+Each analyzer instance still monitors exactly one cluster -- nothing in the analysis logic
+changed. To show 2+ clusters in the dashboard, run one analyzer per cluster and set
+`PEER_CLUSTERS` on each to point at the others:
+```bash
+PEER_CLUSTERS="workload-analyzer-2=http://localhost:8081" go run ./cmd/analyzer   # cluster 1
+PEER_CLUSTERS="workload-analyzer=http://localhost:8080"   go run ./cmd/analyzer   # cluster 2
+```
+`GET /api/clusters` returns `{"self": "...", "peers": [...]}`; the dashboard's top-bar switcher
+navigates to a peer's URL on selection. This is link metadata only -- no analyzer ever calls
+another one, so D-007's read-only scope is unaffected. See `docs/architecture.md`'s multi-cluster
+note and `docs/DECISIONS.md` D-008.
 
 ## Test
 

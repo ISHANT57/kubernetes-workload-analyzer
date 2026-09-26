@@ -38,25 +38,29 @@ type TimeSeriesProvider interface {
 
 // Server serves the analyzer's HTTP endpoints.
 type Server struct {
-	mux     *http.ServeMux
-	latest  LatestProvider
-	builder TimeSeriesProvider // nil is valid: /api/timeseries then returns 501
-	logger  *slog.Logger
+	mux       *http.ServeMux
+	latest    LatestProvider
+	builder   TimeSeriesProvider // nil is valid: /api/timeseries then returns 501
+	clusterID string
+	peers     []model.ClusterPeer
+	logger    *slog.Logger
 }
 
 // New builds a Server. It implements http.Handler directly, so callers wire it into an
 // http.Server without an extra adapter. builder may be nil (disables /api/timeseries only).
 // staticDir, if non-empty, serves the built frontend (frontend/dist after `npm run build`) at
 // "/" with SPA fallback -- see AGENTS.md/docs/architecture.md's "web" module: one deployable,
-// no separate Node process at runtime.
-func New(latest LatestProvider, builder TimeSeriesProvider, staticDir string, logger *slog.Logger) *Server {
-	s := &Server{mux: http.NewServeMux(), latest: latest, builder: builder, logger: logger}
+// no separate Node process at runtime. clusterID and peers back GET /api/clusters (the
+// dashboard's cluster switcher); peers may be nil for the single-cluster default.
+func New(latest LatestProvider, builder TimeSeriesProvider, staticDir, clusterID string, peers []model.ClusterPeer, logger *slog.Logger) *Server {
+	s := &Server{mux: http.NewServeMux(), latest: latest, builder: builder, clusterID: clusterID, peers: peers, logger: logger}
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
 	s.mux.HandleFunc("GET /readyz", s.handleReadyz)
 	s.mux.Handle("GET /metrics", promhttp.Handler())
 	s.mux.HandleFunc("GET /api/runs/latest", s.handleLatestRun)
 	s.mux.HandleFunc("GET /api/findings", s.handleFindings)
 	s.mux.HandleFunc("GET /api/timeseries", s.handleTimeseries)
+	s.mux.HandleFunc("GET /api/clusters", s.handleClusters)
 	if staticDir != "" {
 		s.mux.HandleFunc("GET /", spaHandler(staticDir))
 	}
@@ -137,6 +141,18 @@ func (s *Server) handleFindings(w http.ResponseWriter, r *http.Request) {
 		fs = []model.Finding{}
 	}
 	writeJSON(w, http.StatusOK, fs)
+}
+
+// handleClusters answers "what cluster is this, and what other clusters can I switch to" for the
+// dashboard's cluster switcher. Peers come straight from config (PEER_CLUSTERS) -- this handler
+// makes no outbound call to any peer, so it cannot fail or degrade based on another cluster's
+// health.
+func (s *Server) handleClusters(w http.ResponseWriter, r *http.Request) {
+	peers := s.peers
+	if peers == nil {
+		peers = []model.ClusterPeer{}
+	}
+	writeJSON(w, http.StatusOK, model.ClustersInfo{Self: s.clusterID, Peers: peers})
 }
 
 // handleTimeseries serves one workload/container's recent usage series plus its current

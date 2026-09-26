@@ -43,6 +43,11 @@ spec:
         - {name: CPU_CORE_HOUR_USD, value: "0.031611"}
         - {name: MEMORY_GIB_HOUR_USD, value: "0.004237"}
         - {name: PRICE_SOURCE, value: "example only, approx AWS m5.large on-demand blended rate, NOT a real quote"}
+        # Multi-cluster dashboard switcher (link metadata only -- this analyzer never calls its
+        # peer). The URL is whatever a browser uses to reach the other cluster's analyzer; for
+        # this local kind demo that's its own host port-forward. See deployment-cluster-2.yaml
+        # and docs/architecture.md's multi-cluster note.
+        - {name: PEER_CLUSTERS, value: "workload-analyzer-2=http://localhost:8081"}
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

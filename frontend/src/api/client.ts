@@ -1,6 +1,6 @@
 // Thin, typed wrapper around the backend's JSON API. Every call goes through this file -- no
 // component calls fetch() directly -- so the base path and error handling are defined once.
-import type { AnalysisRun, Finding, TimeSeriesResponse } from './types'
+import type { AnalysisRun, ClustersInfo, Finding, TimeSeriesResponse } from './types'
 
 // Empty string: same-origin, matching how the backend serves the built frontend in production
 // (internal/httpserver would need a static-file handler added for that -- see backend/README.md
@@ -31,6 +31,14 @@ export function getFindings(): Promise<Finding[]> {
 
 export function getLatestRun(): Promise<AnalysisRun> {
   return getJSON<AnalysisRun>('/api/runs/latest')
+}
+
+// getClusters lists this cluster and any peers configured via PEER_CLUSTERS (the dashboard's
+// cluster switcher, see docs/architecture.md's multi-cluster note). Peers are link metadata
+// only -- switching navigates the browser to the peer's own URL, it never proxies through this
+// backend.
+export function getClusters(): Promise<ClustersInfo> {
+  return getJSON<ClustersInfo>('/api/clusters')
 }
 
 export function getTimeseries(

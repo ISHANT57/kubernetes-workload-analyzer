@@ -89,7 +89,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           httpserver.New(analysisRunner, evidenceBuilder, cfg.StaticDir, logger),
+		Handler:           httpserver.New(analysisRunner, evidenceBuilder, cfg.StaticDir, cfg.ClusterID, cfg.PeerClusters, logger),
 		ReadHeaderTimeout: 5 * time.Second, // never accept a client that trickles headers forever
 	}
 

@@ -100,6 +100,50 @@ func TestLoad_ReportsAllErrorsAtOnce(t *testing.T) {
 	}
 }
 
+func TestLoad_NoPeerClusters_DefaultsToNil(t *testing.T) {
+	clearEnv(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with no PEER_CLUSTERS: unexpected error: %v", err)
+	}
+	if cfg.PeerClusters != nil {
+		t.Errorf("PeerClusters default = %+v, want nil (single-cluster, no switcher)", cfg.PeerClusters)
+	}
+}
+
+func TestLoad_ParsesPeerClusters(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PEER_CLUSTERS", "cluster-b=http://localhost:8081, cluster-c=http://localhost:8082")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with valid PEER_CLUSTERS: unexpected error: %v", err)
+	}
+	if len(cfg.PeerClusters) != 2 {
+		t.Fatalf("PeerClusters = %+v, want 2 entries", cfg.PeerClusters)
+	}
+	if cfg.PeerClusters[0].ID != "cluster-b" || cfg.PeerClusters[0].URL != "http://localhost:8081" {
+		t.Errorf("PeerClusters[0] = %+v, want {cluster-b http://localhost:8081}", cfg.PeerClusters[0])
+	}
+	if cfg.PeerClusters[1].ID != "cluster-c" || cfg.PeerClusters[1].URL != "http://localhost:8082" {
+		t.Errorf("PeerClusters[1] = %+v, want {cluster-c http://localhost:8082}", cfg.PeerClusters[1])
+	}
+}
+
+func TestLoad_RejectsMalformedPeerClusters(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("PEER_CLUSTERS", "cluster-b-missing-equals-sign")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() with malformed PEER_CLUSTERS: want error, got nil")
+	}
+	if !contains(err.Error(), "PEER_CLUSTERS") {
+		t.Errorf("Load() error = %q, want it to mention PEER_CLUSTERS", err.Error())
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && (func() bool {
 		for i := 0; i+len(sub) <= len(s); i++ {
@@ -118,6 +162,7 @@ func clearEnv(t *testing.T) {
 	for _, k := range []string{
 		"CLUSTER_ID", "PROMETHEUS_URL", "KUBECONFIG_PATH", "KUBE_CONTEXT",
 		"LISTEN_ADDR", "ANALYSIS_INTERVAL", "PROMETHEUS_TIMEOUT", "KUBERNETES_TIMEOUT", "ANALYSIS_TIMEOUT",
+		"PEER_CLUSTERS",
 	} {
 		t.Setenv(k, "")
 	}

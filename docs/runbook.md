@@ -177,8 +177,39 @@ kubectl --context kind-workload-analyzer -n monitoring patch prometheus kps-kube
 curl -s localhost:8080/api/runs/latest | jq '{status, findings_count}'   # back to "complete"
 ```
 
+## Multi-cluster demo (bonus, D-008)
+
+Two real kind clusters, each with its own kube-prometheus-stack and its own analyzer instance --
+not one cluster split into two views. Set up once (see `backend/README.md`'s multi-cluster
+section for the full commands); to demo it:
+
+```bash
+kubectl --context kind-workload-analyzer   -n analyzer port-forward svc/analyzer 8080:8080 &
+kubectl --context kind-workload-analyzer-2 -n analyzer port-forward svc/analyzer 8081:8080 &
+open http://localhost:8080/
+```
+Real output, both instances correctly self-identifying and listing each other:
+```json
+# localhost:8080/api/clusters
+{"self":"workload-analyzer","peers":[{"id":"workload-analyzer-2","url":"http://localhost:8081"}]}
+# localhost:8081/api/clusters
+{"self":"workload-analyzer-2","peers":[{"id":"workload-analyzer","url":"http://localhost:8080"}]}
+```
+The dashboard's top-bar "Switch cluster" dropdown navigates between the two -- confirmed live via
+Playwright both directions, zero console errors either side. This is a full page navigation to
+the peer's own URL, not a merged view: each analyzer only ever queries its own cluster's
+Prometheus/Kubernetes API (D-007 unaffected). A combined single ranked list across clusters is
+not built (see `docs/DECISIONS.md` D-008).
+
+**A real host limit hit while setting this up, for the record:** running two kind clusters at
+once exhausted `fs.inotify.max_user_instances` (default 128; cluster 1 alone already used 78),
+which crash-looped cluster 2's `kube-proxy` with `too many open files`. Fixed by raising the limit
+(`sudo sysctl fs.inotify.max_user_instances=512`, persisted in
+`/etc/sysctl.d/99-kind-multi-cluster.conf`) -- a real, documented laptop constraint
+(`docs/architecture.md`), not an application bug.
+
 ## Cleanup
 
 ```bash
-kill %1   # the port-forward started above
+kill %1   # the port-forward(s) started above
 ```

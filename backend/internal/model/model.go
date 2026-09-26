@@ -23,6 +23,24 @@ const (
 	RunFailed   RunStatus = "failed"   // the run could not produce a usable snapshot at all
 )
 
+// ClusterPeer is another analyzer instance's public URL, so the dashboard can link a person from
+// one cluster's view to another's. Nothing here means this backend ever talks to that peer
+// directly -- it is link metadata only, read from config (PEER_CLUSTERS), never fetched or
+// proxied server-to-server, so the read-only/least-privilege posture (D-007) and this backend's
+// trust boundary are unaffected by how many peers are listed.
+type ClusterPeer struct {
+	ID  string `json:"id"`
+	URL string `json:"url"`
+}
+
+// ClustersInfo answers "what cluster is this, and what other clusters can I switch to" for
+// GET /api/clusters. Self is this instance's own ClusterID; Peers is never nil (empty slice),
+// matching the no-null-arrays convention already used by /api/findings.
+type ClustersInfo struct {
+	Self  string        `json:"self"`
+	Peers []ClusterPeer `json:"peers"`
+}
+
 // QueryError records one failed check during a run, without aborting the rest of it (AGENTS.md:
 // "unavailable source, timeout, missing series, insufficient permissions → degraded result,
 // logged, counted in a metric").

@@ -1,0 +1,62 @@
+# Second cluster's in-cluster analyzer, for the multi-cluster dashboard switcher demo
+# (docs/architecture.md's multi-cluster note). Identical to deployment.yaml in every way that
+# matters for D-007/security -- same image, same RBAC scope, same hardened securityContext --
+# only CLUSTER_ID and PEER_CLUSTERS differ, because this runs in a separate kind cluster
+# ("workload-analyzer-2"), applied with `kubectl --context kind-workload-analyzer-2 apply -f ...`
+# against its own kube-prometheus-stack and its own deploy/rbac/analyzer.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analyzer
+  namespace: analyzer
+  labels: {app: analyzer}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: analyzer}}
+  template:
+    metadata: {labels: {app: analyzer}}
+    spec:
+      serviceAccountName: analyzer
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: analyzer
+        image: k8s-workload-analyzer:local
+        imagePullPolicy: IfNotPresent
+        ports: [{name: http, containerPort: 8080}]
+        env:
+        - {name: CLUSTER_ID, value: "workload-analyzer-2"}
+        - {name: PROMETHEUS_URL, value: "http://kps-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"}
+        - {name: ANALYSIS_INTERVAL, value: "60s"}
+        - {name: CPU_CORE_HOUR_USD, value: "0.031611"}
+        - {name: MEMORY_GIB_HOUR_USD, value: "0.004237"}
+        - {name: PRICE_SOURCE, value: "example only, approx AWS m5.large on-demand blended rate, NOT a real quote"}
+        - {name: PEER_CLUSTERS, value: "workload-analyzer=http://localhost:8080"}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: ["ALL"]}
+        resources:
+          requests: {cpu: 25m, memory: 32Mi}
+          limits: {memory: 128Mi}
+        readinessProbe:
+          httpGet: {path: /readyz, port: http}
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: {path: /healthz, port: http}
+          initialDelaySeconds: 5
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analyzer
+  namespace: analyzer
+spec:
+  selector: {app: analyzer}
+  ports: [{name: http, port: 8080, targetPort: 8080}]

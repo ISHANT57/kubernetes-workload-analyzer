@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { ClusterSwitcher } from './ClusterSwitcher'
 import './Layout.css'
 
 const NAV = [
@@ -20,6 +21,7 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <ClusterSwitcher />
       </header>
       <main className="content">
         <Outlet />

@@ -30,7 +30,7 @@ func testLogger() *slog.Logger {
 func TestHealthz_AlwaysOK(t *testing.T) {
 	// /healthz must stay 200 even with no run at all -- it answers "is the process alive", not
 	// "is the data good" (that is /readyz's job).
-	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
@@ -40,7 +40,7 @@ func TestHealthz_AlwaysOK(t *testing.T) {
 }
 
 func TestReadyz_NoRunYet_NotReady(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -50,7 +50,7 @@ func TestReadyz_NoRunYet_NotReady(t *testing.T) {
 }
 
 func TestReadyz_CompleteRun_Ready(t *testing.T) {
-	s := New(&fakeLatestProvider{run: &model.AnalysisRun{Status: model.RunComplete}}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: &model.AnalysisRun{Status: model.RunComplete}}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -68,7 +68,7 @@ func TestReadyz_PrometheusDown_NotReady(t *testing.T) {
 		Status:      model.RunPartial,
 		QueryErrors: []model.QueryError{{Source: "prometheus", Message: "connection refused"}},
 	}
-	s := New(&fakeLatestProvider{run: run}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: run}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 
@@ -86,7 +86,7 @@ func TestReadyz_PrometheusDown_NotReady(t *testing.T) {
 }
 
 func TestLatestRun_NoRunYet_ServiceUnavailable(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/runs/latest", nil))
 
@@ -97,7 +97,7 @@ func TestLatestRun_NoRunYet_ServiceUnavailable(t *testing.T) {
 
 func TestLatestRun_ReturnsTheRun(t *testing.T) {
 	run := &model.AnalysisRun{ID: "run-1", Status: model.RunComplete, WorkloadsSeen: 9}
-	s := New(&fakeLatestProvider{run: run}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: run}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/runs/latest", nil))
 
@@ -114,7 +114,7 @@ func TestLatestRun_ReturnsTheRun(t *testing.T) {
 }
 
 func TestFindings_EmptyList_NotNull(t *testing.T) {
-	s := New(&fakeLatestProvider{findings: nil}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{findings: nil}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
 
@@ -128,7 +128,7 @@ func TestFindings_EmptyList_NotNull(t *testing.T) {
 
 func TestFindings_ReturnsTheList(t *testing.T) {
 	fs := []model.Finding{{ID: "f1", RuleID: "R001"}, {ID: "f2", RuleID: "R002"}}
-	s := New(&fakeLatestProvider{findings: fs}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{findings: fs}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/findings", nil))
 
@@ -138,6 +138,41 @@ func TestFindings_ReturnsTheList(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].ID != "f1" || got[1].ID != "f2" {
 		t.Errorf("decoded findings = %+v, want 2 findings f1, f2 in order", got)
+	}
+}
+
+func TestClusters_NoPeers_ReturnsSelfAndEmptyPeers(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", "cluster-a", nil, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/clusters", nil))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/clusters: status = %d, want 200", rec.Code)
+	}
+	var got model.ClustersInfo
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response body: %v", err)
+	}
+	if got.Self != "cluster-a" {
+		t.Errorf("Self = %q, want %q", got.Self, "cluster-a")
+	}
+	if got.Peers == nil || len(got.Peers) != 0 {
+		t.Errorf("Peers = %+v, want a non-nil empty slice", got.Peers)
+	}
+}
+
+func TestClusters_WithPeers_ReturnsThem(t *testing.T) {
+	peers := []model.ClusterPeer{{ID: "cluster-b", URL: "http://localhost:8081"}}
+	s := New(&fakeLatestProvider{}, nil, "", "cluster-a", peers, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/clusters", nil))
+
+	var got model.ClustersInfo
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatalf("decoding response body: %v", err)
+	}
+	if len(got.Peers) != 1 || got.Peers[0].ID != "cluster-b" || got.Peers[0].URL != "http://localhost:8081" {
+		t.Errorf("Peers = %+v, want [{cluster-b http://localhost:8081}]", got.Peers)
 	}
 }
 
@@ -155,7 +190,7 @@ func (f *fakeTimeSeriesProvider) MemoryUsageSeries(ctx context.Context, wl model
 }
 
 func TestTimeseries_NoBuilderConfigured_501(t *testing.T) {
-	s := New(&fakeLatestProvider{}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=cpu", nil))
 	if rec.Code != http.StatusNotImplemented {
@@ -164,7 +199,7 @@ func TestTimeseries_NoBuilderConfigured_501(t *testing.T) {
 }
 
 func TestTimeseries_MissingParams_400(t *testing.T) {
-	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", testLogger())
+	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo", nil))
 	if rec.Code != http.StatusBadRequest {
@@ -173,7 +208,7 @@ func TestTimeseries_MissingParams_400(t *testing.T) {
 }
 
 func TestTimeseries_InvalidMetric_400(t *testing.T) {
-	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", testLogger())
+	s := New(&fakeLatestProvider{}, &fakeTimeSeriesProvider{}, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=disk", nil))
 	if rec.Code != http.StatusBadRequest {
@@ -183,7 +218,7 @@ func TestTimeseries_InvalidMetric_400(t *testing.T) {
 
 func TestTimeseries_Success(t *testing.T) {
 	provider := &fakeTimeSeriesProvider{points: []evidence.Point{{UnixSeconds: 100, Value: 0.5}}, req: 1.0, limit: 2.0}
-	s := New(&fakeLatestProvider{}, provider, "", testLogger())
+	s := New(&fakeLatestProvider{}, provider, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=cpu", nil))
 
@@ -206,7 +241,7 @@ func TestTimeseries_Success(t *testing.T) {
 
 func TestTimeseries_QueryError_502NotCrash(t *testing.T) {
 	provider := &fakeTimeSeriesProvider{err: errors.New("prometheus unreachable")}
-	s := New(&fakeLatestProvider{}, provider, "", testLogger())
+	s := New(&fakeLatestProvider{}, provider, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=memory", nil))
 	if rec.Code != http.StatusBadGateway {
@@ -215,7 +250,7 @@ func TestTimeseries_QueryError_502NotCrash(t *testing.T) {
 }
 
 func TestMetrics_Served(t *testing.T) {
-	s := New(&fakeLatestProvider{run: nil}, nil, "", testLogger())
+	s := New(&fakeLatestProvider{run: nil}, nil, "", "test-cluster", nil, testLogger())
 	rec := httptest.NewRecorder()
 	s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 

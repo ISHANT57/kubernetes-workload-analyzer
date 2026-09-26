@@ -141,5 +141,15 @@ requests -- the analyzer's own advice applied to itself.
 | GitHub Actions (later CI) | FREE-TIER: free minutes for public repos; limited minutes for private repos | Phase 7; optional |
 | OpenCost, KRR | FREE SELF-HOSTED / FREE LOCAL | reference and comparison only |
 
+## Multi-cluster (D-008)
+One analyzer instance per cluster, unchanged from v1's single-cluster logic. Each instance's
+`GET /api/clusters` returns its own `ClusterID` plus any peers from `PEER_CLUSTERS`
+(`id=url` pairs); the dashboard's top bar renders a switcher that navigates to a peer's URL. This
+is link metadata only -- no analyzer instance ever calls another one over the network, so D-007's
+read-only scope and each cluster's trust boundary are independent and unaffected. A combined,
+single ranked list merged across clusters is deliberately not built (no aggregator exists) until
+there's a concrete need for it.
+
 ## Not yet designed (on purpose)
-Authentication, multi-cluster, persistent finding history, alerting, CI and deployment packaging.
+Authentication, a combined multi-cluster findings list, persistent finding history, alerting, CI
+and deployment packaging.

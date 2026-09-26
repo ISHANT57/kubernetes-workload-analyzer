@@ -139,6 +139,33 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   "Analysis run" card demoted to a quieter, dashed, transparent treatment so it doesn't compete
   with the KPI hero above it. Verified live via Playwright against real findings data (desktop
   light, dark, 390px mobile): zero console errors, all three renders confirmed by screenshot.
+- 2026-09-26: Bug fix -- partial workload-evidence failures were reported as `status: complete`.
+  `findings.Analyzer.Analyze()` logged a per-workload evidence-gathering failure (a broken
+  pod-resolution query, a failed container listing) but never returned it; `internal/runner`
+  only ever saw the two top-level Prometheus/Kubernetes connectivity checks, so a run where
+  Prometheus and Kubernetes were both reachable but some individual workload's evidence query
+  failed still reported `complete` -- indistinguishable from a fully clean run, and invisible to
+  `/readyz`. This contradicted `docs/architecture.md`'s own already-documented failure table
+  ("One query fails: only that workload gets query_error; the rest of the run continues") --
+  the fix makes the real behavior match what was already documented, not a new architecture
+  decision. `Analyze()` now returns `[]model.QueryError` alongside its findings; `runner.runOnce`
+  folds them into the run's `QueryErrors` and a revised `statusFor` that tracks source failures
+  (prometheus/kubernetes, `failed` threshold, unchanged) separately from workload failures
+  (`partial` threshold, new) -- a workload-level failure can never by itself push a run to
+  `failed`, since both top-level sources being reachable means some usable data still exists.
+  4 new tests in `internal/findings` (all workloads succeed -> no errors; some workload fails ->
+  error returned for that workload only, source=`evidence`; successful workload's finding still
+  present; error messages identify the workload without leaking anything unsafe) and 4 in
+  `internal/runner` (partial workload failure -> `status: partial` with an `evidence`-source
+  `QueryError`; successful workload's finding preserved in `Findings()`; all-succeed ->
+  `complete`; a full Prometheus outage still reports the pre-existing `partial` behavior
+  unchanged, confirming no regression). The fix was proven against the real bug, not just
+  written to pass a test written after the fact: reverting the runner-side wiring while keeping
+  the new tests made `TestRunOnce_PartialWorkloadFailure_ReportsPartialNotComplete` fail exactly
+  as expected, then passed again once restored. No change to rules, thresholds, cost semantics,
+  `/readyz`'s own logic, the frontend, or any new infrastructure -- `/readyz` behaves correctly
+  now only because the `Status` it reads is finally accurate. Rebuilt and redeployed to both live
+  clusters; both confirmed healthy post-deploy.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

@@ -35,23 +35,38 @@ func (a *Analyzer) HasPricing() bool {
 }
 
 // Analyze evaluates every rule against every container of every given workload and returns a
-// ranked finding list. It never returns an error itself: a failure to gather evidence for one
-// workload is recorded as a QueryError-derived log line and that workload is simply skipped for
-// this run, exactly like the runner's own per-source degradation (AGENTS.md: "degraded result,
-// logged, counted").
-func (a *Analyzer) Analyze(ctx context.Context, runID string, workloads []model.WorkloadRef, now time.Time) []model.Finding {
+// ranked finding list, plus every per-workload evidence-gathering failure encountered along the
+// way. It never returns a fatal error itself: a failure to gather evidence for one workload is
+// recorded (both logged and returned as a model.QueryError) and that workload is simply skipped
+// for this run, exactly like the runner's own per-source degradation (AGENTS.md: "degraded
+// result, logged, counted"). The caller (internal/runner) is responsible for folding the
+// returned errors into the AnalysisRun so a run with successful-but-incomplete workload coverage
+// is reported as partial, not complete -- Analyze itself has no notion of "the whole run's
+// status", only "what happened while building evidence for these workloads".
+func (a *Analyzer) Analyze(ctx context.Context, runID string, workloads []model.WorkloadRef, now time.Time) ([]model.Finding, []model.QueryError) {
 	var out []model.Finding
+	var errs []model.QueryError
 
 	for _, wl := range workloads {
 		containers, err := a.Builder.ResolveContainers(ctx, wl)
 		if err != nil {
 			a.Logger.Warn("resolving containers failed", "workload", wl.Name, "namespace", wl.Namespace, "error", err)
+			errs = append(errs, model.QueryError{
+				Source:  "evidence",
+				Message: fmt.Sprintf("%s/%s: resolving containers: %s", wl.Namespace, wl.Name, err.Error()),
+			})
 			continue
 		}
 		for _, container := range containers {
 			ev := a.Builder.Build(ctx, wl, container, now)
 			if len(ev.QueryErrors) > 0 {
 				a.Logger.Warn("evidence gathering had errors", "workload", wl.Name, "container", container, "errors", ev.QueryErrors)
+				for _, qe := range ev.QueryErrors {
+					errs = append(errs, model.QueryError{
+						Source:  "evidence",
+						Message: fmt.Sprintf("%s/%s/%s: %s", wl.Namespace, wl.Name, container, qe),
+					})
+				}
 			}
 			for _, rule := range rules.All {
 				f := rule(ev, runID, now)
@@ -68,7 +83,7 @@ func (a *Analyzer) Analyze(ctx context.Context, runID string, workloads []model.
 	}
 
 	rank(out)
-	return out
+	return out, errs
 }
 
 // stableID hashes cluster+rule+namespace+workload+container so that re-running analysis on

@@ -9,6 +9,7 @@ data-quality gate embedded in `internal/evidence`), cost estimation, and the JSO
 ```
 cmd/analyzer/main.go        wiring only: config -> clients -> analyzer -> runner -> http server
 cmd/verify/main.go          manual debug tool: prints raw evidence for demo/ fixtures
+cmd/loadtest/main.go        manual benchmark tool: concurrent GET load + latency percentiles
 internal/config/            env-var configuration, validated
 internal/logging/           structured JSON logging (stdlib log/slog)
 internal/model/             dependency-free domain types (AnalysisRun, Finding, WorkloadRef, ...)
@@ -85,6 +86,15 @@ Prometheus. Notable ones:
 - `internal/rules`: one fixture per `demo/` scenario, matching `demo/expected-findings.yaml`.
 - `internal/evidence`: `TestBurstiness_ZeroMedianWithRealTail_IsInfinite` -- a regression test
   for a real bug caught live (see docs/requirements.md §3 implementation notes).
+
+## Load test / benchmarks
+
+```bash
+kubectl -n analyzer port-forward svc/analyzer 8080:8080 &
+go run ./cmd/loadtest -base http://localhost:8080 -concurrency 20 -duration 15s
+```
+Real measured results, methodology and a resource-usage-under-load finding:
+[../docs/performance.md](../docs/performance.md).
 
 ## Kubernetes access
 

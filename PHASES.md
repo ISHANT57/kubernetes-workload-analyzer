@@ -99,6 +99,21 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   this live rather than papering over it, and the cost-impact section is worked out from the real
   evidence and the real deployed formula (`internal/findings/findings.go`, `CostHours = 730`)
   rather than showing a fabricated API response, per AGENTS.md's "never invent metrics" rule.
+- 2026-09-26: Post-Phase-8 gap closure (not a new phase; three documentation/testing gaps found
+  during an honest completion review against the original brief). `backend/cmd/loadtest/main.go`
+  (new, stdlib only): concurrent GET load generator, the brief §17 "basic load test". Run live
+  against the in-cluster analyzer: 5 endpoints, 20 concurrent workers, 15s each, ~212k total
+  requests, zero errors. `docs/performance.md` (new): the real measured results --
+  `/healthz`/`/readyz`/`/api/runs/latest`/`/api/findings` at 3-6ms p50 / 15-20ms p99;
+  `/api/timeseries` at 47ms p50 / 113ms p99 (queries Prometheus live per request, by design, unlike
+  the other endpoints which read the in-memory snapshot); a genuine finding that CPU usage spiked
+  to 1614m under this load against a 25m request with no CPU limit set (no restart, no OOM,
+  documented as a recommendation, not silently applied); and the real
+  `analyzer_analysis_run_duration_seconds` histogram from `/metrics` (29 runs, mean 0.643s, all
+  under 1s). `docs/reports/phase-3-report.{html,pdf}` through `phase-8-report.{html,pdf}` (new):
+  the PDF write-up convention from Phases 1-2 had lapsed for Phases 3-8; backfilled from the
+  already-verified facts in this file and `docs/*`, not reconstructed from memory, in the same
+  template.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

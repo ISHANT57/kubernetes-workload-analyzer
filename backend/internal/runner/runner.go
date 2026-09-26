@@ -146,10 +146,31 @@ func (r *Runner) runOnce(ctx context.Context) {
 	// to iterate, so attempting it during an outage would just be wasted queries producing
 	// mostly query_error evidence. The last good finding list stays as-is (sticky), and this
 	// run's Status/QueryErrors already say honestly that nothing fresh was computed.
+	//
+	// sourceFailures counts only the two top-level connectivity checks above (prometheus,
+	// kubernetes) -- statusFor uses this, not len(run.QueryErrors), to decide "failed" vs
+	// "partial", so per-workload evidence failures (appended below) can never by themselves push
+	// a run to "failed": both top-level sources being reachable means *some* usable data exists
+	// this cycle, even if a subset of workloads' evidence could not be gathered.
+	sourceFailures := 0
+	if promErr != nil {
+		sourceFailures++
+	}
+	if k8sErr != nil {
+		sourceFailures++
+	}
+	workloadFailures := 0
+
 	if r.analyzer != nil && promErr == nil && k8sErr == nil {
 		analysisCtx, cancelAnalysis := context.WithTimeout(ctx, r.analysisTimeout)
-		fresh := r.analyzer.Analyze(analysisCtx, run.ID, refs, start)
+		fresh, workloadErrs := r.analyzer.Analyze(analysisCtx, run.ID, refs, start)
 		cancelAnalysis()
+		// Surfaced in the run's own QueryErrors (safely: the same Source/Message shape already
+		// used for the prometheus/kubernetes checks above, no new exposure) instead of only a
+		// log line -- a workload whose evidence could not be gathered must be visible to an API
+		// consumer, not silently dropped from a run that otherwise looks clean.
+		run.QueryErrors = append(run.QueryErrors, workloadErrs...)
+		workloadFailures = len(workloadErrs)
 		run.FindingsCount = len(fresh)
 		r.mu.Lock()
 		r.latestFindings = fresh
@@ -160,7 +181,7 @@ func (r *Runner) runOnce(ctx context.Context) {
 		r.mu.RUnlock()
 	}
 
-	run.Status = statusFor(run.QueryErrors)
+	run.Status = statusFor(sourceFailures, workloadFailures)
 	run.DurationMillis = time.Since(start).Milliseconds()
 
 	metrics.RunsTotal.WithLabelValues(string(run.Status)).Inc()
@@ -180,22 +201,29 @@ func (r *Runner) runOnce(ctx context.Context) {
 	r.mu.Unlock()
 }
 
-// statusFor decides the run's overall status from the errors collected during it.
-//   - no errors                              -> complete
-//   - some sources failed, others succeeded  -> partial (a snapshot still exists, just degraded)
-//   - every source failed                    -> failed (nothing usable was produced this run)
+// statusFor decides the run's overall status.
+//   - no source failures, no workload failures  -> complete
+//   - some degradation, but not total           -> partial (a snapshot still exists, just degraded)
+//   - every top-level source failed              -> failed (nothing usable was produced this run)
 //
-// Phase 3 checks exactly two sources (Prometheus, Kubernetes), so "every source failed" means
-// both; this generalizes correctly once Phase 4 adds more sources without needing a rewrite.
-func statusFor(errs []model.QueryError) model.RunStatus {
+// sourceFailures counts only the two top-level connectivity checks (Prometheus, Kubernetes) --
+// Phase 3 checks exactly two, so "every source failed" means both; this generalizes correctly
+// once a later phase adds more sources without needing a rewrite. workloadFailures counts
+// per-workload evidence-gathering errors (Phase 4's rule engine, once both top-level sources are
+// reachable): these can only ever degrade a run to "partial", never "failed" -- both top-level
+// sources being reachable means this run produced *some* usable data, even if a subset of
+// workloads' evidence could not be gathered. This is what makes "some workload evidence fails
+// while sources stay up" report as partial instead of the misleadingly clean "complete" it used
+// to report before this distinction existed.
+func statusFor(sourceFailures, workloadFailures int) model.RunStatus {
 	const totalSources = 2
 	switch {
-	case len(errs) == 0:
-		return model.RunComplete
-	case len(errs) >= totalSources:
+	case sourceFailures >= totalSources:
 		return model.RunFailed
-	default:
+	case sourceFailures > 0 || workloadFailures > 0:
 		return model.RunPartial
+	default:
+		return model.RunComplete
 	}
 }
 

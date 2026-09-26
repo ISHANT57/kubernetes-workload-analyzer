@@ -11,18 +11,25 @@ const NAV = [
 
 export function Layout() {
   return (
-    <div className="layout">
-      <header className="topbar">
-        <div className="brand">Kubernetes Workload Analyzer</div>
-        <nav className="nav">
-          {NAV.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-        <ClusterSwitcher />
-      </header>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="sidebar-scroll">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true" />
+            Workload Analyzer
+          </div>
+          <nav className="nav">
+            {NAV.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+        <div className="sidebar-footer">
+          <ClusterSwitcher />
+        </div>
+      </aside>
       <main className="content">
         <Outlet />
       </main>

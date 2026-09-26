@@ -6,7 +6,10 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
 )
 
 // Config is the analyzer's full runtime configuration.
@@ -58,6 +61,12 @@ type Config struct {
 	// per container), so a per-query timeout alone does not stop the whole pass from running
 	// arbitrarily long if Prometheus is merely slow rather than fully down.
 	AnalysisTimeout time.Duration
+
+	// PeerClusters lists other analyzer instances' public URLs for the dashboard's cluster
+	// switcher (GET /api/clusters). Link metadata only -- this backend never calls a peer.
+	// Empty (the default) means "single cluster, no switcher shown", matching v1's scope
+	// (docs/architecture.md: multi-cluster "not yet designed" beyond this link).
+	PeerClusters []model.ClusterPeer
 }
 
 // Load reads configuration from the environment, applies defaults for optional fields, and
@@ -119,10 +128,41 @@ func Load() (Config, error) {
 		errs = append(errs, fmt.Errorf("ANALYSIS_TIMEOUT must be positive, got %s", cfg.AnalysisTimeout))
 	}
 
+	peers, err := parsePeerClusters(os.Getenv("PEER_CLUSTERS"))
+	if err != nil {
+		errs = append(errs, err)
+	}
+	cfg.PeerClusters = peers
+
 	if len(errs) > 0 {
 		return Config{}, joinErrors(errs)
 	}
 	return cfg, nil
+}
+
+// parsePeerClusters reads "id1=url1,id2=url2" into peer links. An unset or empty variable is
+// valid and returns no peers (nil), not an error -- single-cluster is still the default. A set
+// but malformed entry (missing "=", empty id or url) is rejected rather than silently dropped or
+// guessed, so a typo in the deploy manifest fails at startup, not as a missing button in the UI.
+func parsePeerClusters(raw string) ([]model.ClusterPeer, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var peers []model.ClusterPeer
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		id, url, ok := strings.Cut(entry, "=")
+		id, url = strings.TrimSpace(id), strings.TrimSpace(url)
+		if !ok || id == "" || url == "" {
+			return nil, fmt.Errorf("PEER_CLUSTERS: invalid entry %q, want \"id=url\"", entry)
+		}
+		peers = append(peers, model.ClusterPeer{ID: id, URL: url})
+	}
+	return peers, nil
 }
 
 func getEnv(key, fallback string) string {

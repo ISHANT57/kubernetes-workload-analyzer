@@ -16,6 +16,7 @@ so the ADRs can cite measured evidence. Written 2026-09-25: [ADR-001](decisions/
 | D-005 | Local cluster tool | kind, single node; switch to k3d if available RAM < 1.5 GiB after the monitoring stack is installed | ACCEPTED 2026-09-24 |
 | D-006 | Project positioning | Portfolio/demo project: unified, explainable findings; KRR and OpenCost used as comparison baselines | ACCEPTED 2026-09-24 |
 | D-007 | Backend Kubernetes API access | ClusterRole `get/list/watch` on namespaces, nodes, deployments, replicasets, statefulsets, daemonsets, HPAs, events. No pods, secrets or configmaps. Metrics come from Prometheus only | ACCEPTED 2026-09-24 |
+| D-008 | Multi-cluster (2+ clusters) | One analyzer instance per cluster (unchanged, no code split); dashboard gets a client-side cluster switcher (`GET /api/clusters`, link metadata only, no server-to-server calls) | ACCEPTED 2026-09-26 |
 
 ---
 
@@ -125,3 +126,23 @@ specs are sensitive: they contain literal env values, which often hold secrets.
 horizontalpodautoscalers, events`. No `pods`, `secrets`, `configmaps`, `pods/log`, `pods/exec`, and
 no write verbs. Pod-level facts (restarts, OOM, requests) come from KSM via Prometheus. Verified with
 `kubectl auth can-i` checks. · **Status: ACCEPTED 2026-09-24**
+
+## D-008 Multi-cluster (2+ clusters)
+**Problem:** v1 monitors one cluster. A real need arose to show 2+ clusters monitored at once for
+a demo. `docs/architecture.md` had left multi-cluster "not yet designed (on purpose)" -- every core
+type already carries `ClusterID` (AGENTS.md), but no aggregation or UI existed.
+
+| Option | For | Against |
+|---|---|---|
+| **One analyzer per cluster + client-side switcher (chosen)** | Zero change to the proven single-cluster analyzer's logic; each instance still only ever talks to its own Prometheus/Kubernetes API (D-007 untouched); switcher is a link, not a proxy, so no new trust boundary | No single combined ranked list across clusters yet -- switching is a full page navigation, not a merged view |
+| Combined single list (one aggregator merges N analyzers' `/api/findings`) | One ranked list across all clusters -- closer to "true" multi-cluster monitoring | New aggregator service/logic, new failure mode (aggregator down != any cluster down), more code for a demo need |
+| Single analyzer process holds N Kubernetes/Prometheus clients | One deployment to operate | Bigger blast radius on crash; N sets of credentials/config in one place; against "small modules" |
+
+**Decision:** One analyzer instance per cluster (already reusable as-is, no code change to the
+core logic); a new `GET /api/clusters` endpoint returns this instance's `ClusterID` plus a
+`PEER_CLUSTERS`-configured list of other clusters' URLs; the dashboard's top bar shows a switcher
+that navigates to a peer's own URL. This is link metadata only -- no analyzer ever calls another
+analyzer, so D-007's read-only/least-privilege posture and each cluster's trust boundary are
+unaffected. Combined single-list aggregation is deferred until there's a concrete need for it
+(same "don't build future stages without a reason" principle as the rest of v1).
+**Status: ACCEPTED 2026-09-26**

@@ -84,3 +84,13 @@ export interface TimeSeriesResponse {
   limit: number
   points: TimeSeriesPoint[]
 }
+
+export interface ClusterPeer {
+  id: string
+  url: string
+}
+
+export interface ClustersInfo {
+  self: string
+  peers: ClusterPeer[]
+}

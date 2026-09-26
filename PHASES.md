@@ -114,6 +114,20 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   the PDF write-up convention from Phases 1-2 had lapsed for Phases 3-8; backfilled from the
   already-verified facts in this file and `docs/*`, not reconstructed from memory, in the same
   template.
+- 2026-09-26: D-008 multi-cluster switcher (owner-requested, for a manager demo showing 2+
+  clusters monitored). New `GET /api/clusters` endpoint (`self` + `PEER_CLUSTERS`-configured
+  peers, link metadata only -- no analyzer instance ever calls another one); dashboard top-bar
+  switcher navigates to a peer's own URL. Verified with two real, separately-deployed kind
+  clusters (`workload-analyzer`, `workload-analyzer-2`), each with its own full
+  kube-prometheus-stack, demo workloads and analyzer Deployment -- not one cluster split into two
+  views. Confirmed live via Playwright: switching works both directions, zero console errors
+  either side, each `/api/clusters` correctly self-identifies and lists the other as a peer. A
+  real host limit was hit and fixed along the way: two kind clusters exhausted
+  `fs.inotify.max_user_instances` (128 default; cluster 1 alone used 78), crash-looping cluster
+  2's `kube-proxy` with "too many open files" -- raised to 512 and persisted
+  (`/etc/sysctl.d/99-kind-multi-cluster.conf`), a documented laptop constraint
+  (`docs/architecture.md`), not an application bug. Combined single-list aggregation across
+  clusters deliberately not built (see D-008) until there's a concrete need for it.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

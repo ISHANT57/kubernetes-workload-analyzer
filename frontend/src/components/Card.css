@@ -7,6 +7,20 @@
   overflow-x: auto; /* safety net for wide tables on narrow viewports; checked live at 390px */
 }
 
+/* A visually quieter card for secondary, self-referential content (the analyzer's own run
+   status) that should not compete with the KPI hero or the findings above it -- hierarchy
+   through restraint, not another bordered box of equal weight. */
+.card--quiet {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.card--quiet .card-title {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
 .card-title {
   margin: 0 0 0.85rem;
   font-size: 0.95rem;
@@ -33,6 +47,7 @@
   font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat-label {

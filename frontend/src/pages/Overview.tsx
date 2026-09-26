@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom'
 import { getFindings, getLatestRun } from '../api/client'
 import { Card } from '../components/Card'
 import { CategoryTag, SeverityBadge } from '../components/Badges'
+import { KpiRow, KpiTile } from '../components/Kpi'
+import { StatusStrip } from '../components/StatusStrip'
 import { ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
 import { formatRelativeTime } from '../format'
@@ -29,28 +31,16 @@ export function Overview() {
       <h1 className="page-title">Cluster Overview</h1>
       {(run.stale || findings.stale) && <StaleBanner />}
 
-      <Card title="Cluster health">
-        <div className="stat-row">
-          <div className="stat">
-            <div className={`stat-value ${critical > 0 ? 'stat-critical' : 'stat-good'}`}>{critical}</div>
-            <div className="stat-label">Critical findings</div>
-          </div>
-          <div className="stat">
-            <div className={`stat-value ${warning > 0 ? 'stat-warning' : 'stat-good'}`}>{warning}</div>
-            <div className="stat-label">Warnings</div>
-          </div>
-          <div className="stat">
-            <div className="stat-value">{info}</div>
-            <div className="stat-label">Info / caveats</div>
-          </div>
-          <div className="stat">
-            <div className="stat-value">{r.workloads_seen}</div>
-            <div className="stat-label">Workloads monitored</div>
-          </div>
-        </div>
-      </Card>
+      <KpiRow>
+        <KpiTile value={critical} label="Critical findings" tone={critical > 0 ? 'critical' : 'good'} />
+        <KpiTile value={warning} label="Warnings" tone={warning > 0 ? 'warning' : 'good'} />
+        <KpiTile value={info} label="Info / caveats" tone={info > 0 ? 'info' : 'neutral'} />
+        <KpiTile value={r.workloads_seen} label="Workloads monitored" tone="neutral" />
+      </KpiRow>
 
-      <Card title="Analysis run">
+      <StatusStrip findings={fs} />
+
+      <Card title="Analysis run" className="card--quiet">
         <div className="stat-row">
           <div className="stat">
             <div className={`stat-value ${r.status === 'complete' ? 'stat-good' : r.status === 'partial' ? 'stat-warning' : 'stat-critical'}`}>{r.status}</div>
@@ -100,7 +90,7 @@ export function Overview() {
         )}
         {fs.length > 5 && (
           <p>
-            <Link to="/findings">See all {fs.length} findings →</Link>
+            <Link to="/findings">See all {fs.length} findings</Link>
           </p>
         )}
       </Card>

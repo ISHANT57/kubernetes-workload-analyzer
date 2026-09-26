@@ -370,15 +370,42 @@ func (b *Builder) buildHPA(ctx context.Context, ev *WorkloadEvidence, now time.T
 	}
 }
 
-// resolvePodNames finds the live pods currently owned by workload, via kube_pod_owner joined to
-// kube_replicaset_owner on the ReplicaSet name -- the Prometheus-only substitute for listing a
-// Deployment's pods directly (verified live against the real cluster before this was written;
-// see docs/kubernetes-fundamentals.md and the Phase 4 commit for the exact query and its output).
+// resolvePodNames finds the live pods currently owned by workload -- the Prometheus-only
+// substitute for listing a workload's pods directly (D-007 grants no `pods` access). The owner
+// chain differs by Kind, so the query does too (PR18, workload discovery coverage):
+//
+//   - Deployment: owns pods through an intermediate ReplicaSet, so kube_pod_owner reports
+//     owner_kind="ReplicaSet" on the pod, not "Deployment". Resolving a Deployment's pods needs
+//     the two-hop join below: kube_pod_owner (pod -> ReplicaSet name) joined to
+//     kube_replicaset_owner (ReplicaSet name -> Deployment name), on the ReplicaSet name
+//     (verified live against the real cluster before this was written; see
+//     docs/kubernetes-fundamentals.md and the Phase 4 commit for the exact query and its output).
+//   - StatefulSet and DaemonSet: own their pods directly, no intermediate object. kube_pod_owner
+//     already reports owner_kind="StatefulSet"/"DaemonSet" and the right owner_name straight on
+//     the pod, so a single direct query resolves them -- the two-hop ReplicaSet join would
+//     structurally never match here, since kube_pod_owner never emits owner_kind="ReplicaSet"
+//     for these pods in the first place (a StatefulSet/DaemonSet never creates a ReplicaSet).
+//     Verified live: both a real StatefulSet (Prometheus itself, deployed by the Prometheus
+//     Operator) and a real DaemonSet (node-exporter) in the monitoring namespace resolve
+//     correctly through this path.
 func (b *Builder) resolvePodNames(ctx context.Context, workload analyzermodel.WorkloadRef) ([]string, error) {
-	query := fmt.Sprintf(`label_replace(kube_pod_owner{namespace=%q, owner_kind="ReplicaSet"}, "rsname", "$1", "owner_name", "(.*)")
+	var query string
+	switch workload.Kind {
+	case "Deployment":
+		query = fmt.Sprintf(`label_replace(kube_pod_owner{namespace=%q, owner_kind="ReplicaSet"}, "rsname", "$1", "owner_name", "(.*)")
   * on(namespace, rsname) group_left()
 label_replace(kube_replicaset_owner{namespace=%q, owner_kind=%q, owner_name=%q}, "rsname", "$1", "replicaset", "(.*)")`,
-		workload.Namespace, workload.Namespace, workload.Kind, workload.Name)
+			workload.Namespace, workload.Namespace, workload.Kind, workload.Name)
+	case "StatefulSet", "DaemonSet":
+		query = fmt.Sprintf(`kube_pod_owner{namespace=%q, owner_kind=%q, owner_name=%q}`,
+			workload.Namespace, workload.Kind, workload.Name)
+	default:
+		// Fail closed rather than silently returning zero pods for a Kind resolvePodNames does
+		// not know how to resolve -- an unrecognized Kind is a real programming error (a new
+		// workload Kind was added to k8sclient without teaching this function its owner chain),
+		// not a legitimate "no live pods" state, and the two must not look identical to a caller.
+		return nil, fmt.Errorf("resolvePodNames: unsupported workload kind %q", workload.Kind)
+	}
 
 	vec, err := b.Prom.QueryInstant(ctx, query)
 	if err != nil {

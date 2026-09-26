@@ -129,10 +129,10 @@ func (r *Runner) runOnce(ctx context.Context) {
 	// cycle's listing failed -- a caller wanting "is this number fresh" reads those, not
 	// WorkloadsSeen in isolation.
 	k8sCtx, cancelK8s := context.WithTimeout(ctx, r.k8sTimeout)
-	refs, k8sErr := r.k8s.ListDeployments(k8sCtx)
+	refs, k8sErr := r.k8s.ListWorkloads(k8sCtx)
 	cancelK8s()
 	if k8sErr != nil {
-		r.logger.Warn("kubernetes deployment listing failed", "error", k8sErr)
+		r.logger.Warn("kubernetes workload listing failed", "error", k8sErr)
 		run.QueryErrors = append(run.QueryErrors, model.QueryError{Source: "kubernetes", Message: k8sErr.Error()})
 		metrics.QueryErrorsTotal.WithLabelValues("kubernetes").Inc()
 		run.WorkloadsSeen = r.lastGoodWorkloadsSeen

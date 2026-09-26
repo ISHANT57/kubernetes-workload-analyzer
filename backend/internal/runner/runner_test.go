@@ -43,7 +43,7 @@ type fakeK8sClient struct {
 }
 
 func (f *fakeK8sClient) Healthy(ctx context.Context) error { return f.listErr }
-func (f *fakeK8sClient) ListDeployments(ctx context.Context) ([]analyzermodel.WorkloadRef, error) {
+func (f *fakeK8sClient) ListWorkloads(ctx context.Context) ([]analyzermodel.WorkloadRef, error) {
 	if f.listErr != nil {
 		return nil, f.listErr
 	}

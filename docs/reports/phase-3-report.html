@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 3 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-3-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-3-report.pdf docs/reports/phase-3-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Phase 3 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — Go backend skeleton, verified against the live cluster</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-25)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-26</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>65cb805</code>, merged as <code>d19c5d3</code> (PR #7)</td></tr>
+    <tr><td><b>Cluster</b></td><td>kind <code>workload-analyzer</code>, Kubernetes v1.37.0, single node</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 3 was for</li>
+    <li>Package layout</li>
+    <li>The analysis loop design</li>
+    <li>Kubernetes and Prometheus clients (D-007 scope)</li>
+    <li>HTTP surface</li>
+    <li>Unit tests (fakes, no live cluster)</li>
+    <li>Live verification against the real cluster</li>
+    <li>Graceful shutdown</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state, operating and rollback</li>
+    <li>Open items and next phase</li>
+  </ol>
+</section>
+
+<section class="pb">
+  <h2>1. What Phase 3 was for</h2>
+  <p>Phases 1-2 built the data layer (cluster, monitoring stack, verified metrics) and the demo
+  fixtures. Phase 3 built the backend's <b>skeleton</b>: configuration, the Prometheus and
+  Kubernetes clients, the analysis loop, and the operational HTTP surface
+  (<code>/healthz</code>/<code>/readyz</code>/<code>/metrics</code>/<code>/api/runs/latest</code>).
+  Deliberately out of scope for Phase 3: the rule engine, evidence builder, cost model and
+  <code>/api/findings</code> — those are Phase 4. The done-condition (<code>PHASES.md</code>):
+  "Runs against the cluster; degrades cleanly with Prometheus down."</p>
+</section>
+
+<section class="pb">
+  <h2>2. Package layout</h2>
+  <p>Go 1.27 module under <code>backend/</code>, chosen and recorded as D-001. Every external call
+  sits behind a small interface so the whole module except <code>cmd/*</code> is testable with
+  fakes, no live cluster required (<code>backend/README.md</code>).</p>
+  <pre>cmd/analyzer/main.go        wiring only: config -&gt; clients -&gt; runner -&gt; http server
+internal/config/            env-var configuration, validated
+internal/logging/           structured JSON logging (stdlib log/slog)
+internal/model/             dependency-free domain types (AnalysisRun, WorkloadRef, ...)
+internal/promclient/        Prometheus client behind an interface (instant + range queries)
+internal/k8sclient/         Kubernetes client behind an interface, scoped to D-007
+internal/runner/            the analysis loop: timer, failure handling, in-memory snapshot
+internal/httpserver/        /healthz /readyz /metrics /api/runs/latest
+internal/metrics/           the analyzer's own Prometheus metrics (self-observability)</pre>
+</section>
+
+<section class="pb">
+  <h2>3. The analysis loop design</h2>
+  <p>An in-process ticker runs on <code>ANALYSIS_INTERVAL</code>, lists workloads from the
+  Kubernetes API, and keeps the latest result as an in-memory <b>snapshot</b>
+  (<code>internal/runner</code>) — no queue, no worker process, no database (<code>docs/architecture.md</code>,
+  "Shape: modular monolith"). Each cycle produces a <code>model.AnalysisRun</code> with a status of
+  <code>complete</code>, <code>partial</code> or <code>failed</code>. On a source failure, the
+  runner keeps the <b>previous</b> snapshot rather than blanking it — the sticky-snapshot pattern
+  used consistently in every later phase too (findings in Phase 4, the dashboard's polling hook in
+  Phase 5).</p>
+</section>
+
+<section class="pb">
+  <h2>4. Kubernetes and Prometheus clients (D-007 scope)</h2>
+  <p><code>internal/k8sclient</code> lists namespaces, nodes, deployments, replicasets,
+  statefulsets, daemonsets, HPAs and events only — the read-only ClusterRole decided in D-007. No
+  <code>pods</code>, <code>secrets</code> or <code>configmaps</code> access exists in the client at
+  all, not just in the RBAC that constrains it: a coding mistake could not accidentally list pods
+  even before the in-cluster RBAC is applied (that live RBAC verification is Phase 7).
+  <code>internal/promclient</code> wraps <code>client_golang/api/prometheus/v1</code> for instant
+  and range queries, with per-query timeouts.</p>
+</section>
+
+<section class="pb">
+  <h2>5. HTTP surface</h2>
+  <table>
+    <tr><th>Endpoint</th><th>Behaviour</th></tr>
+    <tr><td><code>/healthz</code></td><td>process liveness — always <code>ok</code> while the process is up</td></tr>
+    <tr><td><code>/readyz</code></td><td>200 only when the last analysis run was <code>complete</code>; 503 otherwise</td></tr>
+    <tr><td><code>/metrics</code></td><td>the analyzer's own Prometheus metrics (<code>internal/metrics</code>): run count by status, run duration histogram, query error count, workloads-seen gauge</td></tr>
+    <tr><td><code>/api/runs/latest</code></td><td>the current in-memory <code>AnalysisRun</code> snapshot as JSON</td></tr>
+  </table>
+</section>
+
+<section class="pb">
+  <h2>6. Unit tests (fakes, no live cluster)</h2>
+  <pre>go vet ./...
+gofmt -l .        # prints nothing
+go test ./...     # all packages pass</pre>
+  <p>Notable tests, both later also live-verified against the real cluster (§7): <code>TestRunOnce_PrometheusDown</code> and <code>TestLatest_WorkloadsSeenSurvivesAFailedRun</code> in <code>internal/runner</code> — the "degrades cleanly" done-condition, exercised with a fake Prometheus client that returns an error.</p>
+</section>
+
+<section class="pb">
+  <h2>7. Live verification against the real cluster</h2>
+  <p>Run with the real kind cluster and a real Prometheus port-forward, not just against fakes:</p>
+  <div class="box key">
+    <b>Results (2026-09-25):</b>
+    <ul>
+      <li>Correctly counted <b>16 deployments</b> from the live Kubernetes API on the first run.</li>
+      <li>Prometheus access was killed mid-run and restored live: <code>/readyz</code> correctly
+      went <b>503</b> during the outage and recovered to <b>200</b> once Prometheus was reachable
+      again.</li>
+      <li><code>workloads_seen</code> stayed at <b>16</b> throughout the outage — carried forward
+      from the last successful Kubernetes listing, never dropped to 0 by a Prometheus failure
+      (Kubernetes and Prometheus are independent sources; one failing does not blank the other's
+      last-good data).</li>
+      <li><code>/healthz</code> stayed unaffected the whole time (process liveness, not
+      dependency health).</li>
+      <li>Graceful <code>SIGTERM</code> shutdown confirmed: the process drains and exits cleanly,
+      not killed mid-request.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="pb">
+  <h2>8. Graceful shutdown</h2>
+  <p><code>cmd/analyzer/main.go</code> listens for <code>SIGTERM</code>/<code>SIGINT</code> and
+  shuts the HTTP server down with a bounded context, rather than the process dying mid-request —
+  the behaviour a Kubernetes <code>Deployment</code> rollout or <code>kubectl delete pod</code>
+  relies on to avoid a dropped request. Verified locally (§7); re-verified in-cluster during
+  Phase 7's rollout.</p>
+</section>
+
+<section class="pb">
+  <h2>9. Git and GitHub workflow</h2>
+  <p>Branch <code>phase-3</code> → commit <code>65cb805</code> ("feat(phase-3): Go backend
+  skeleton, verified against the live cluster") → PR #7 → merged as <code>d19c5d3</code> → branch
+  deleted locally and on GitHub. <code>deploy/rbac/analyzer.yaml</code> was written in this phase
+  but deliberately <b>not yet applied</b> to the cluster — in-cluster deployment is Phase 7; Phase
+  3 development still runs on the host against the admin kubeconfig.</p>
+</section>
+
+<section class="pb">
+  <h2>10. Current state, operating and rollback</h2>
+  <pre>kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+cd backend &amp;&amp; CLUSTER_ID=workload-analyzer KUBE_CONTEXT=kind-workload-analyzer go run ./cmd/analyzer
+curl localhost:8080/healthz
+curl localhost:8080/readyz
+curl localhost:8080/api/runs/latest</pre>
+  <p>Rollback: the skeleton has no in-cluster footprint yet (host-only in this phase), so rollback
+  is simply not running the process / reverting the merge commit.</p>
+</section>
+
+<section class="pb">
+  <h2>11. Open items and next phase</h2>
+  <ul>
+    <li>No rule engine, evidence builder, cost model or <code>/api/findings</code> yet — Phase 4.</li>
+    <li><code>deploy/rbac/analyzer.yaml</code> written but not applied — Phase 7.</li>
+    <li>No dashboard yet — the API has no consumer other than <code>curl</code> until Phase 5.</li>
+  </ul>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 8 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-8-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-8-report.pdf docs/reports/phase-8-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Phase 8 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — scripted demo, final demonstration</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-26)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-26</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>a998b5d</code>, merged as <code>4c2d200</code> (PR #13)</td></tr>
+    <tr><td><b>All 8 phases</b></td><td>DONE</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 8 was for</li>
+    <li>The runbook's structure</li>
+    <li>A real observation caught while writing the runbook</li>
+    <li>What was deliberately not fabricated</li>
+    <li>Git and GitHub workflow</li>
+    <li>Follow-up artifacts added after Phase 8 closed</li>
+    <li>Honest project status against the original brief</li>
+  </ol>
+</section>
+
+<section class="pb">
+  <h2>1. What Phase 8 was for</h2>
+  <p>Phases 0-7 built and verified the platform piece by piece. Phase 8's job was to prove the
+  whole thing end to end against the original brief's own success criteria (§24, items 1-8 — the
+  demonstrable core; items 9-14 are documentation/testing artifacts covered by existing docs and
+  the test suite, not a live demo step) and write that proof down as a runbook the owner can
+  re-run. Done condition (<code>PHASES.md</code>): "Demo runbook in
+  <code>docs/runbook.md</code>."</p>
+</section>
+
+<section class="pb">
+  <h2>2. The runbook's structure</h2>
+  <p><code>docs/runbook.md</code> has one section per success criterion, each with a real command
+  run against the live in-cluster analyzer:</p>
+  <ol>
+    <li>A Kubernetes cluster being monitored — <code>/healthz</code>, <code>/readyz</code>, <code>/api/runs/latest</code></li>
+    <li>Workloads discovered automatically — live deployment count vs. <code>workloads_seen</code></li>
+    <li>CPU/memory metrics collected — <code>/api/timeseries</code></li>
+    <li>Resource requests vs. actual usage — R001/R002 evidence</li>
+    <li>Pod failures/restarts detected — R003/R004 on the <code>oom</code>/<code>crashloop</code> fixtures</li>
+    <li>Health issues on the dashboard — the five pages, Playwright-verified in Phase 5/6</li>
+    <li>Resource optimization opportunities — the negative controls (<code>right-sized</code>, <code>cpu-spike</code>, <code>hpa-coupled</code>) and why each is excluded</li>
+    <li>Estimated cost impact with documented assumptions — the pricing formula and disclaimer</li>
+  </ol>
+  <p>Plus a bonus "Failure-path demo" reproducing Phase 7's real Prometheus-outage test.</p>
+</section>
+
+<section class="pb">
+  <h2>3. A real observation caught while writing the runbook</h2>
+  <div class="box key">
+    Running §7's command right after Phase 7's deliberate Prometheus outage test showed every
+    R001/R002 candidate at <code>data_quality: insufficient</code>
+    ("less than 80% coverage over the minimum 30m0s window") instead of firing — confirmed with
+    <code>cmd/verify</code> against the live fixtures. The outage itself had just created a real
+    gap in that 30-minute coverage window. This is R005 (the data-quality gate) working exactly as
+    designed: it declines to assert a resource finding on thin data rather than guessing through
+    the gap, and self-clears once the gap ages out of the lookback. Documented live in the
+    runbook rather than smoothed over with a normal-looking example.
+  </div>
+</section>
+
+<section class="pb">
+  <h2>4. What was deliberately not fabricated</h2>
+  <p>An early draft of the runbook's cost-impact section included example
+  <code>allocation_cost_usd</code>/<code>optimized_cost_usd</code> numbers that were not actually
+  pulled from a live API response — caught and corrected before merging, per <code>AGENTS.md</code>'s
+  "never invent metrics" rule. The corrected section instead shows the real evidence captured live
+  from <code>cmd/verify</code> and works the real cost formula
+  (<code>internal/findings/findings.go</code>, <code>CostHours = 730</code>) through it by hand,
+  labelled explicitly as a derived illustration rather than a copied API response, since R001
+  was not firing (§3) at the moment of writing.</p>
+</section>
+
+<section class="pb">
+  <h2>5. Git and GitHub workflow</h2>
+  <p>Branch <code>phase-8</code> → commit <code>a998b5d</code> ("feat(phase-8): scripted demo
+  runbook, final demonstration") → PR #13 → merged as <code>4c2d200</code> → branch deleted. All 8
+  phases in <code>PHASES.md</code> are DONE as of this merge.</p>
+</section>
+
+<section class="pb">
+  <h2>6. Follow-up artifacts added after Phase 8 closed</h2>
+  <p>Three gaps against the original brief's full documentation/testing ambition (identified in an
+  honest completion review, not part of the Phase 0-8 plan itself) were closed afterward:</p>
+  <ul>
+    <li><code>docs/performance.md</code> — real measured API latency percentiles, resource usage
+    under load, and analysis-run duration from the live in-cluster analyzer's own
+    <code>/metrics</code>.</li>
+    <li><code>backend/cmd/loadtest/main.go</code> — a small stdlib-only concurrent load generator
+    (brief §17's "basic load tests"), used to produce the numbers in <code>docs/performance.md</code>.</li>
+    <li>This report and <code>phase-3</code> through <code>phase-7-report.{html,pdf}</code> — the
+    PDF write-up convention established in Phases 1-2 had lapsed for Phases 3-8; backfilled here
+    from the already-verified facts in <code>PHASES.md</code> and <code>docs/*</code>, not
+    reconstructed from memory.</li>
+  </ul>
+</section>
+
+<section class="pb">
+  <h2>7. Honest project status against the original brief</h2>
+  <p>The demoable MVP (brief §24 items 1-8, <code>PHASES.md</code> Phases 0-8) is complete and
+  live-verified. Explicitly out of scope by the brief's own written decision
+  (<code>docs/requirements.md</code>, "Out of MVP"): authentication beyond local access,
+  multi-cluster, alerting, finding history/persistence, an AI explainability layer, and CI/CD
+  deployment. Also not built: a formal KRR/OpenCost comparison (deferred, Phase 4), the
+  Pending/unschedulable health rule and R004's near-limit-memory variant (both named backlog
+  items), and <code>docs/observability.md</code> as a dedicated file (its content is covered
+  across <code>docs/architecture.md</code>, <code>docs/performance.md</code> and this report
+  series instead). None of these were silently dropped — each is named in a doc.</p>
+</section>
+
+</body>
+</html>

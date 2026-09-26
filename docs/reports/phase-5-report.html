@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 5 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-5-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-5-report.pdf docs/reports/phase-5-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Phase 5 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — React dashboard, single-binary serving</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-26)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-26</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>7d3455a</code>, merged as <code>1cb1cd1</code> (PR #10)</td></tr>
+    <tr><td><b>Stack</b></td><td>React 19, Vite 8, TypeScript, uPlot, react-router-dom 7 (D-002)</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 5 was for</li>
+    <li>Pages built</li>
+    <li>Sticky-on-failure polling</li>
+    <li>New backend surface: /api/timeseries</li>
+    <li>Single-binary serving</li>
+    <li>TypeScript build issues found and fixed</li>
+    <li>Live Playwright verification</li>
+    <li>A real mobile CSS bug found and fixed</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state and operating</li>
+    <li>Open items and next phase</li>
+  </ol>
+</section>
+
+<section class="pb">
+  <h2>1. What Phase 5 was for</h2>
+  <p>Phase 4 produced a findings API with no UI consumer. Phase 5 built the dashboard decided in
+  D-002: React + Vite + TypeScript, built to static files served by the Go backend itself (no
+  Node server at runtime), uPlot for the charts that answer a specific question. Done condition
+  (<code>PHASES.md</code>): Overview, Findings, Detail, Workloads, Platform Status pages.</p>
+</section>
+
+<section class="pb">
+  <h2>2. Pages built</h2>
+  <table>
+    <tr><th>Page</th><th>Purpose</th></tr>
+    <tr><td>Overview</td><td>top findings, ranked health-first then resource then cost</td></tr>
+    <tr><td>Findings</td><td>full filterable list (severity, category, rule)</td></tr>
+    <tr><td>Finding Detail</td><td>full evidence table, threshold, window, data-quality/confidence badge, caveats, and — for R001/R002 — a real uPlot usage-vs-request chart</td></tr>
+    <tr><td>Workloads</td><td>every discovered workload, not only ones with findings</td></tr>
+    <tr><td>Platform Status</td><td>the analyzer's own health: last run status, query errors, data coverage</td></tr>
+  </table>
+  <p>uPlot is used imperatively (a ref + <code>useEffect</code>), not through a React wrapper
+  component — kept as a thin, explicit integration rather than adding a charting-library
+  dependency wrapper of its own.</p>
+</section>
+
+<section class="pb">
+  <h2>3. Sticky-on-failure polling</h2>
+  <p><code>src/hooks/usePolling.ts</code> keeps the last-good data on screen and marks it
+  <code>partial</code>/<code>stale</code> rather than blanking the UI on a transient API failure —
+  the same sticky-snapshot pattern already used on the backend (Phase 3's runner, Phase 4's
+  findings), now carried into the frontend so a brief Prometheus or network hiccup does not flash
+  the dashboard empty.</p>
+</section>
+
+<section class="pb">
+  <h2>4. New backend surface: /api/timeseries</h2>
+  <p>The only backend change in this phase: <code>GET /api/timeseries</code>, reusing the evidence
+  builder's existing, fixed, parameterized Prometheus queries (<code>CPUUsageSeries</code>/
+  <code>MemoryUsageSeries</code> in <code>internal/evidence/builder.go</code>) — the browser still
+  never sends PromQL, only <code>namespace</code>/<code>workload</code>/<code>container</code>/
+  <code>metric</code>/<code>window</code> query parameters. Response shape:
+  <code>{"points": [{"t": unix_seconds, "v": value}, ...]}</code>.</p>
+</section>
+
+<section class="pb">
+  <h2>5. Single-binary serving</h2>
+  <p>The Go backend now also serves the built frontend directly: <code>STATIC_DIR</code> env var +
+  SPA fallback (<code>internal/httpserver</code>'s <code>spaHandler</code>), so the whole product
+  is one deployable binary with no separate Node server at runtime — the tradeoff D-002 was
+  decided around. Without <code>STATIC_DIR</code> the backend still works as an API-only server,
+  used during frontend development where <code>npm run dev</code> proxies to it instead.</p>
+</section>
+
+<section class="pb">
+  <h2>6. TypeScript build issues found and fixed</h2>
+  <div class="box warn">
+    <b>Constructor parameter-property shorthand rejected.</b> <code>erasableSyntaxOnly</code>
+    disallows <code>constructor(public status: number)</code>; <code>ApiError</code> was rewritten
+    with an explicit field plus a constructor body.
+  </div>
+  <div class="box warn">
+    <b>Unused parameter build error.</b> <code>noUnusedParameters</code> caught an unused
+    <code>metric</code> parameter in <code>formatEvidenceValue()</code>; removed.
+  </div>
+</section>
+
+<section class="pb">
+  <h2>7. Live Playwright verification</h2>
+  <p>Verified with a real backend and real cluster data via Playwright browser automation, not
+  just built and assumed to work:</p>
+  <ul>
+    <li>Desktop viewport — zero console errors.</li>
+    <li>Mobile viewport (390×844) — zero console errors.</li>
+    <li>Dark mode (<code>prefers-color-scheme</code> emulation) — zero console errors.</li>
+  </ul>
+</section>
+
+<section class="pb">
+  <h2>8. A real mobile CSS bug found and fixed</h2>
+  <div class="box bad">
+    Long PromQL query text in the evidence table overflowed the card layout at 390px width — only
+    visible by actually rendering the page at mobile size, not from reading the code. Fixed with
+    <code>word-break: break-all</code> on <code>.evidence-table code</code> and
+    <code>overflow-x: auto</code> on <code>.card</code>, then re-verified at 390px with a fresh
+    screenshot.
+  </div>
+</section>
+
+<section class="pb">
+  <h2>9. Git and GitHub workflow</h2>
+  <p>Branch <code>phase-5</code> → commit <code>7d3455a</code> ("feat(phase-5): React dashboard,
+  /api/timeseries, single-binary static serving") → PR #10 → merged as <code>1cb1cd1</code> →
+  branch deleted.</p>
+</section>
+
+<section class="pb">
+  <h2>10. Current state and operating</h2>
+  <pre>cd frontend &amp;&amp; npm install &amp;&amp; npm run build
+cd backend &amp;&amp; STATIC_DIR=$(pwd)/../frontend/dist go run ./cmd/analyzer
+# open http://localhost:8080/</pre>
+</section>
+
+<section class="pb">
+  <h2>11. Open items and next phase</h2>
+  <ul>
+    <li>Resource findings show no way to jump into raw Prometheus/Grafana time series yet — Phase 6.</li>
+    <li>No in-cluster deployment yet — the backend and frontend build still run on the host — Phase 7.</li>
+  </ul>
+</section>
+
+</body>
+</html>

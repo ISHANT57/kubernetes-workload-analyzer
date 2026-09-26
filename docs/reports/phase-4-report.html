@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 4 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-4-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-4-report.pdf docs/reports/phase-4-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Phase 4 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — rule engine, evidence, cost, findings API</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-26); KRR comparison deferred</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-26</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>3807a0e</code>, merged as <code>11848d6</code> (PR #9)</td></tr>
+    <tr><td><b>Delegation</b></td><td>Phases 4-8 full implementation autonomy granted by the owner 2026-09-26 (<code>AGENTS.md</code>)</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 4 was for</li>
+    <li>Evidence builder: resolving pods without pods access</li>
+    <li>Self-calibrated data coverage (R005)</li>
+    <li>Rules R001-R004</li>
+    <li>Three real bugs found via live verification</li>
+    <li>Cost model</li>
+    <li>Live verification against demo/expected-findings.yaml</li>
+    <li>A genuine non-fixture finding</li>
+    <li>Idempotency and graceful degradation</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state and operating</li>
+    <li>Open items and next phase</li>
+  </ol>
+</section>
+
+<section class="pb">
+  <h2>1. What Phase 4 was for</h2>
+  <p>Phase 4 is the analytical core: turning Prometheus data into evidence-based findings. Built:
+  the evidence builder, R001-R004 as pure functions, the R005 data-quality gate, the cost
+  estimator, the findings orchestrator (ranking, stable IDs), and <code>/api/findings</code>. Done
+  condition (<code>PHASES.md</code>): output matches <code>demo/expected-findings.yaml</code> for
+  all 9 fixtures. This is the first phase run under the owner's Phase 4-8 delegation
+  (<code>AGENTS.md</code>): full implementation autonomy, still bound by the Correctness/Security/Code
+  rules as a hard floor.</p>
+</section>
+
+<section class="pb">
+  <h2>2. Evidence builder: resolving pods without pods access</h2>
+  <p>D-007 grants no <code>pods</code> API access, but usage metrics
+  (<code>container_cpu_usage_seconds_total</code> etc.) only carry a <code>pod</code> label, not an
+  owner reference. Pods are resolved entirely through kube-state-metrics series instead: <code>kube_pod_owner</code>
+  joined to <code>kube_replicaset_owner</code> on the ReplicaSet name, using <code>label_replace</code>
+  on both sides to align the join key (<code>internal/evidence/builder.go</code>'s
+  <code>resolvePodNames</code>) — verified live to return exactly the right pod name before being
+  relied on elsewhere.</p>
+  <pre>label_replace(kube_pod_owner{namespace="demo", owner_kind="ReplicaSet"}, "rsname", "$1", "owner_name", "(.*)")
+  * on(namespace, rsname) group_left()
+label_replace(kube_replicaset_owner{namespace="demo", owner_kind="Deployment", owner_name="cpu-over-requested"}, "rsname", "$1", "replicaset", "(.*)")</pre>
+</section>
+
+<section class="pb">
+  <h2>3. Self-calibrated data coverage (R005)</h2>
+  <p>Coverage is <b>not</b> assumed from a fixed scrape interval. An assumed 30s interval was
+  checked against real fixture data and found off by more than 2x (823 samples over ~15h where the
+  assumption predicted ~1816) — likely scrape-job cadence differences plus real gaps. Coverage
+  instead comes from the actual sample timestamps returned: span covered ÷ window, penalized for
+  the single largest gap found. Tiers: <b>insufficient</b> (below 80% coverage even at the 30m
+  minimum) · <b>stale</b> (newest sample older than 5m) · <b>ok</b> at 30m/24h/7d, mapping to
+  confidence LOW/MEDIUM/HIGH respectively.</p>
+</section>
+
+<section class="pb">
+  <h2>4. Rules R001-R004</h2>
+  <table>
+    <tr><th>ID</th><th>Rule</th><th>Condition</th><th>Gate</th></tr>
+    <tr><td>R001</td><td>CPU over-requested</td><td>p95(usage) &lt; 0.5x request AND request-p95 &ge; 100m AND throttled &lt; 5% AND not HPA-CPU-coupled AND not bursty (p99/p50 &le; 4)</td><td>R005 <code>ok</code></td></tr>
+    <tr><td>R002</td><td>Memory over-requested</td><td>max(working set) &lt; 0.5x request AND request-max &ge; 64Mi AND no OOM in 24h</td><td>R005 <code>ok</code></td></tr>
+    <tr><td>R003</td><td>Frequent restarts</td><td>restart increase &ge; 3 in 1h OR &ge; 10 in 24h</td><td>restart counter present</td></tr>
+    <tr><td>R004</td><td>OOM</td><td>last_terminated_reason == OOMKilled AND restarts increased in 24h</td><td>termination reason + restart counter present</td></tr>
+  </table>
+  <p>R003/R004 deliberately skip the R005 coverage-tier gate: a restart counter is meaningful with
+  far less history than a percentile calculation needs, and the 30m/24h/7d bar would under-serve
+  health findings that should fire quickly. <b>Not implemented</b> (named so it isn't silently
+  forgotten): R004's original design also included a near-limit warning
+  (<code>max(working set) &ge; 0.9x limit</code>), left out because no demo fixture exercises it —
+  candidate for a later phase.</p>
+</section>
+
+<section class="pb">
+  <h2>5. Three real bugs found via live verification</h2>
+  <p>Not made to pass a test written after the fact — each was caught by running against the real
+  cluster, then turned into a regression test.</p>
+  <div class="box bad">
+    <b>Bug 1 — a <code>rate()</code> window that silently defeated the bursty guard.</b>
+    The CPU usage query originally used <code>rate(...[5m])</code>. For the <code>cpu-spike</code>
+    fixture (30s burst every 300s), a 5-minute lookback smoothed every evaluated point into a
+    near-constant ~10% average, destroying the p50/p99 spread the burstiness guard depends on.
+    Diagnosed with a standalone debug tool showing P50=0.1056, P95=0.1108, P99=0.1180 — nearly
+    flat, burst smoothed away entirely. Fixed to <code>rate(...[2m])</code>, short enough to leave
+    idle-only points near zero and burst-overlapping points visibly elevated.
+  </div>
+  <div class="box bad">
+    <b>Bug 2 — a zero median inverted the burstiness signal.</b>
+    <code>Burstiness() = P99/P50</code> returned 0 when P50 was exactly 0, treating "no
+    meaningful median" the same as "no signal at all" — exactly backwards for a workload idle
+    more than half the time with a real usage tail. Fixed to return <code>+Inf</code> in that
+    case, now covered by <code>TestBurstiness_ZeroMedianWithRealTail_IsInfinite</code>.
+  </div>
+  <div class="box warn">
+    <b>Bug 3 — a misleading confidence-reason message.</b>
+    The LOW-tier confidence reason string used the medium-window constant twice instead of the
+    minimum-window constant, so the printed explanation didn't match the actual threshold being
+    applied. Fixed and covered.
+  </div>
+  <p class="muted">Full detail: <code>docs/requirements.md</code> §3, "Implementation notes".</p>
+</section>
+
+<section class="pb">
+  <h2>6. Cost model</h2>
+  <p>Allocation = <code>max(request, observed usage)</code> (same idea as OpenCost). Cost fields
+  are always labelled <b>Estimated</b>; the reduction is a <b>potential difference</b>, never
+  "savings" (<code>internal/cost/cost.go</code>). No built-in default price:
+  <code>PricingUnset</code> fails closed if either <code>CPU_CORE_HOUR_USD</code> or
+  <code>MEMORY_GIB_HOUR_USD</code> is missing — a finding either has a fully assumption-labelled
+  cost or none at all, never a silent guess.</p>
+</section>
+
+<section class="pb">
+  <h2>7. Live verification against demo/expected-findings.yaml</h2>
+  <p>End-to-end against the real cluster with real pricing configured — output matched
+  <code>demo/expected-findings.yaml</code> exactly for all 9 fixtures: <code>right-sized</code> and
+  <code>hpa-coupled</code> and <code>new-workload</code> and <code>pending</code> produced no
+  R001/R002 (negative controls), <code>cpu-over-requested</code>/<code>memory-over-requested</code>
+  fired R001/R002 at MEDIUM confidence, <code>cpu-spike</code> was correctly suppressed by the
+  bursty guard, <code>oom</code> fired R004+R003 at <code>critical</code>, <code>crashloop</code>
+  fired R003 only (R004 correctly did not fire — reason is <code>Error</code>, not
+  <code>OOMKilled</code>).</p>
+</section>
+
+<section class="pb">
+  <h2>8. A genuine non-fixture finding</h2>
+  <p>The live analyzer found a real, non-fixture R002 finding on
+  <code>kube-system/metrics-server</code> — 200Mi requested vs ~59Mi observed. Not planted, not a
+  demo scenario: it confirms the rule engine generalizes to real cluster workloads beyond what it
+  was built and tuned against.</p>
+</section>
+
+<section class="pb">
+  <h2>9. Idempotency and graceful degradation</h2>
+  <p>Finding IDs are <code>sha256(cluster + rule + namespace + workload + container)</code>,
+  truncated to 16 hex characters — verified idempotent: the same finding IDs across independent
+  runs, so re-running never duplicates a finding. With real pricing wired in, Prometheus was
+  killed and restored live again (as in Phase 3, now with the full findings pipeline attached):
+  findings stayed sticky, <code>/readyz</code> 503'd and recovered, <code>SIGTERM</code> shutdown
+  stayed clean.</p>
+</section>
+
+<section class="pb">
+  <h2>10. Git and GitHub workflow</h2>
+  <p>Delegation recorded first: <code>chore: record Phase 4-8 implementation delegation in
+  AGENTS.md</code> (<code>5303ab5</code>, PR #8, merged <code>8067f33</code>). Then branch
+  <code>phase-4</code> → commit <code>3807a0e</code> ("feat(phase-4): rule engine (R001-R004),
+  evidence, cost, findings API") → PR #9 → merged as <code>11848d6</code> → branch deleted.</p>
+</section>
+
+<section class="pb">
+  <h2>11. Current state and operating</h2>
+  <pre>kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+cd backend
+CPU_CORE_HOUR_USD=0.0316 MEMORY_GIB_HOUR_USD=0.0042 PRICE_SOURCE="example only" go run ./cmd/analyzer
+curl localhost:8080/api/findings</pre>
+</section>
+
+<section class="pb">
+  <h2>12. Open items and next phase</h2>
+  <ul>
+    <li>KRR comparison deferred to a later phase — not blocking, no demo fixture needs it.</li>
+    <li>R004 near-limit-memory variant not built (backlog).</li>
+    <li>No dashboard yet — <code>/api/findings</code> has no UI consumer until Phase 5.</li>
+  </ul>
+</section>
+
+</body>
+</html>

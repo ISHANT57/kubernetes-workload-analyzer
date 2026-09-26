@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 7 Report — Kubernetes Workload Analyzer</title>
+<!--
+  Source for docs/reports/phase-7-report.pdf. Rebuild with:
+    google-chrome --headless --no-pdf-header-footer \
+      --print-to-pdf=docs/reports/phase-7-report.pdf docs/reports/phase-7-report.html
+-->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --accent:#1f5fa8; --soft:#f3f6f9;
+          --ok:#1e7b43; --warn:#9a5b00; --bad:#b3261e; }
+  * { box-sizing: border-box; }
+  body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; color: var(--accent); }
+  h2 { font-size: 15pt; margin: 18pt 0 6pt; padding-bottom: 3pt; border-bottom: 2px solid var(--accent);
+       color: var(--accent); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 4pt; break-after: avoid; }
+  p { margin: 4pt 0 6pt; }
+  ul, ol { margin: 3pt 0 6pt 16pt; padding: 0; }
+  li { margin: 1.5pt 0; }
+  code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.6pt;
+         background: var(--soft); padding: 0 2pt; border-radius: 2pt; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8pt; line-height: 1.35;
+        background: var(--soft); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        padding: 6pt 8pt; margin: 4pt 0 8pt; white-space: pre-wrap; word-break: break-word;
+        break-inside: avoid; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 9pt; font-size: 8.8pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 3pt 5pt; vertical-align: top; text-align: left; }
+  th { background: var(--soft); font-weight: bold; }
+  tr { break-inside: avoid; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-bottom: 18pt; }
+  .cover table { width: auto; font-size: 10pt; }
+  .cover td { border: none; padding: 2pt 14pt 2pt 0; }
+  .pb { break-before: page; }
+  .box { border: 1px solid var(--line); background: var(--soft); padding: 6pt 9pt; margin: 6pt 0 9pt;
+         break-inside: avoid; }
+  .key { border-left: 4px solid var(--ok); }
+  .warn { border-left: 4px solid var(--warn); }
+  .bad { border-left: 4px solid var(--bad); }
+  .tag { display: inline-block; font-size: 7.5pt; font-weight: bold; padding: 0 3pt; border-radius: 2pt;
+         color: #fff; }
+  .m { background: var(--ok); } .v { background: var(--accent); } .e { background: var(--warn); }
+  .u { background: var(--bad); }
+  .muted { color: var(--muted); }
+  .toc ol { columns: 2; column-gap: 20pt; }
+  .small { font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <h1>Phase 7 Report</h1>
+  <div class="sub">Kubernetes Workload Analyzer — production hardening, in-cluster deploy</div>
+  <table>
+    <tr><td><b>Phase status</b></td><td>DONE (2026-09-26)</td></tr>
+    <tr><td><b>Report date</b></td><td>2026-09-26</td></tr>
+    <tr><td><b>Repository</b></td><td>github.com/ISHANT57/kubernetes-workload-analyzer</td></tr>
+    <tr><td><b>State of main</b></td><td><code>15382bc</code>, merged as <code>75c112d</code> (PR #12)</td></tr>
+    <tr><td><b>Image</b></td><td><code>gcr.io/distroless/static-debian12:nonroot</code>, 45.7 MB, non-root, no shell</td></tr>
+    <tr><td><b>Written for</b></td><td>the project owner, as a study and reference document</td></tr>
+  </table>
+  <div class="box" style="margin-top:18pt">
+    <b>Evidence labels used throughout.</b>
+    <span class="tag m">MEASURED</span> a command was run on this machine and the number is its output ·
+    <span class="tag v">VERIFIED</span> checked against upstream documentation, source or a registry ·
+    <span class="tag e">ESTIMATED</span> a projection, not measured ·
+    <span class="tag u">UNVERIFIED</span> not yet tested; a test is named.
+  </div>
+</section>
+
+<section class="pb toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>What Phase 7 was for</li>
+    <li>Multi-stage Dockerfile</li>
+    <li>Dedicated namespace and hardened Deployment</li>
+    <li>A real distroless gotcha, hit and fixed</li>
+    <li>Resources sized from measurement, not guessed</li>
+    <li>D-007 RBAC re-verified live with a real token</li>
+    <li>A methodology bug: the Operator reverted a direct scale-down</li>
+    <li>The real Prometheus outage/recovery test</li>
+    <li>Git and GitHub workflow</li>
+    <li>Current state, operating and rollback</li>
+    <li>Open items and next phase</li>
+  </ol>
+</section>
+
+<section class="pb">
+  <h2>1. What Phase 7 was for</h2>
+  <p>Phases 3-6 all ran on the host, against the admin kubeconfig. Phase 7 is where the analyzer
+  actually becomes a Kubernetes workload: containerized, deployed with its own scoped
+  ServiceAccount, hardened, and proven to fail and recover correctly under a real, deliberate
+  outage — not a simulated one. Done condition (<code>PHASES.md</code>): "Failure tests pass
+  (Prometheus down, partial query failure, duplicate run, insufficient history)".</p>
+</section>
+
+<section class="pb">
+  <h2>2. Multi-stage Dockerfile</h2>
+  <p><code>backend/Dockerfile</code>: <code>node:24-alpine</code> builds the frontend, then
+  <code>golang:1.27-alpine</code> builds the Go binary
+  (<code>CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w"</code>), then both are copied
+  into a final <code>gcr.io/distroless/static-debian12:nonroot</code> stage — no shell, no package
+  manager, no build tools in the shipped image. Built image: <b>45.7 MB</b>.</p>
+</section>
+
+<section class="pb">
+  <h2>3. Dedicated namespace and hardened Deployment</h2>
+  <p><code>deploy/rbac/analyzer.yaml</code> gained a dedicated <code>analyzer</code> namespace
+  (ServiceAccount moved out of <code>default</code>); the D-007 ClusterRole/ClusterRoleBinding
+  content is unchanged from Phase 3. <code>deploy/analyzer/deployment.yaml</code> (new): Deployment
+  + Service with:</p>
+  <ul>
+    <li><code>runAsNonRoot: true</code>, explicit <code>runAsUser</code>/<code>runAsGroup: 65532</code></li>
+    <li><code>allowPrivilegeEscalation: false</code></li>
+    <li><code>readOnlyRootFilesystem: true</code></li>
+    <li>all Linux capabilities dropped</li>
+    <li><code>seccompProfile: RuntimeDefault</code></li>
+    <li>no kubeconfig mounted — <code>rest.InClusterConfig()</code> picks up the ServiceAccount token automatically</li>
+    <li><code>PROMETHEUS_URL</code> pointed at the in-cluster Service DNS name instead of <code>localhost</code></li>
+  </ul>
+</section>
+
+<section class="pb">
+  <h2>4. A real distroless gotcha, hit and fixed</h2>
+  <div class="box bad">
+    <code>CreateContainerConfigError: container has runAsNonRoot and image has non-numeric user
+    (nonroot), cannot verify user is non-root.</code> distroless's <code>nonroot</code> image sets
+    <code>USER nonroot</code> — a name, not a UID — which the kubelet cannot resolve to satisfy
+    <code>runAsNonRoot: true</code> without an explicit numeric <code>runAsUser</code>/
+    <code>runAsGroup</code>. Fixed by adding <code>runAsUser: 65532, runAsGroup: 65532</code> to
+    the pod's securityContext.
+  </div>
+</section>
+
+<section class="pb">
+  <h2>5. Resources sized from measurement, not guessed</h2>
+  <p><code>kubectl top</code> against the running pod showed idle usage around <b>~1m CPU / 10Mi
+  memory</b>, peaking to <b>~18m CPU</b> during an analysis run (<code>docs/architecture.md</code>,
+  "Where it runs"). The Deployment's <code>requests</code> (<code>cpu: 25m, memory: 32Mi</code>)
+  and memory <code>limit</code> (<code>128Mi</code>) were set from that measurement with headroom
+  — the analyzer's own "measure, don't guess" advice applied to itself. An initial guess of
+  <code>20m/48Mi</code> was replaced once the real numbers were in hand.</p>
+</section>
+
+<section class="pb">
+  <h2>6. D-007 RBAC re-verified live with a real token</h2>
+  <p>Not re-simulated — a real bearer token was pulled from the actual in-cluster ServiceAccount
+  and used from an isolated kubeconfig:</p>
+  <pre>kubectl -n analyzer create token analyzer
+KUBECONFIG=/dev/null kubectl --server=&lt;api-server&gt; --token=&lt;token&gt; --insecure-skip-tls-verify=true \
+  auth can-i list pods -A       # no
+  auth can-i list secrets -A    # no
+  auth can-i list deployments -A   # yes
+  auth can-i create deployments -A # no
+  auth whoami                   # system:serviceaccount:analyzer:analyzer</pre>
+  <p><code>kubectl auth whoami</code> was used to confirm real identity, not
+  <code>--as=</code> impersonation, which would not have proven the token itself carries these
+  restrictions. <code>docs/threat-model.md</code>'s ServiceAccount-token-leak mitigation row cites
+  this exact verification.</p>
+</section>
+
+<section class="pb">
+  <h2>7. A methodology bug: the Operator reverted a direct scale-down</h2>
+  <div class="box warn">
+    The first attempt to simulate a Prometheus outage scaled the StatefulSet directly
+    (<code>kubectl scale statefulset ... --replicas=0</code>). The Prometheus Operator silently
+    reverted it within ~52 seconds — it reconciles from the <code>Prometheus</code> custom
+    resource's desired state, not from manual StatefulSet edits — producing a false-negative test
+    result (<code>status: complete</code> when Prometheus had, in fact, already been restored by
+    the operator before the check ran). <b>Fixed</b> by patching the <code>Prometheus</code> CR's
+    own <code>spec.replicas</code> instead, which the operator honors as the real desired state:
+    <pre>kubectl -n monitoring patch prometheus kps-kube-prometheus-stack-prometheus --type merge -p '{"spec":{"replicas":0}}'</pre>
+  </div>
+</section>
+
+<section class="pb">
+  <h2>8. The real Prometheus outage/recovery test</h2>
+  <div class="box key">
+    <b>Outage (Prometheus CR scaled to 0):</b>
+    <pre>{
+  "status": "partial",
+  "workloads_seen": 17,
+  "findings_count": 3,
+  "query_errors": [{"source": "prometheus",
+    "message": "...dial tcp 10.96.240.82:9090: connect: connection refused"}]
+}</pre>
+    <code>/readyz</code> → <b>503</b>. <code>findings_count</code> stayed at its last-good value
+    (sticky), never dropped to 0.
+    <br><br>
+    <b>Recovery (CR restored to <code>replicas: 1</code>):</b> once the Prometheus pod became
+    Ready, the analyzer's <b>next scheduled cycle</b> recovered on its own —
+    <code>status: complete</code>, <code>/readyz</code> → <b>200</b> — with no restart of the
+    analyzer itself needed.
+  </div>
+</section>
+
+<section class="pb">
+  <h2>9. Git and GitHub workflow</h2>
+  <p>Branch <code>phase-7</code> → commit <code>15382bc</code> ("feat(phase-7): production
+  hardening, in-cluster deploy") → PR #12 → merged as <code>75c112d</code> → branch deleted.</p>
+</section>
+
+<section class="pb">
+  <h2>10. Current state, operating and rollback</h2>
+  <pre>docker build -f backend/Dockerfile -t k8s-workload-analyzer:local .
+kind load docker-image k8s-workload-analyzer:local --name workload-analyzer
+kubectl apply -f deploy/rbac/analyzer.yaml
+kubectl apply -f deploy/analyzer/deployment.yaml
+kubectl -n analyzer rollout status deploy/analyzer
+kubectl -n analyzer port-forward svc/analyzer 8080:8080</pre>
+  <p>Rollback: <code>kubectl delete -f deploy/analyzer/deployment.yaml -f deploy/rbac/analyzer.yaml</code>.</p>
+</section>
+
+<section class="pb">
+  <h2>11. Open items and next phase</h2>
+  <ul>
+    <li>No scripted end-to-end demo yet — Phase 8.</li>
+    <li>No formal load test / performance benchmark document existed at the time this phase
+    closed — added afterward as a follow-up artifact, see <code>docs/performance.md</code>.</li>
+  </ul>
+</section>
+
+</body>
+</html>

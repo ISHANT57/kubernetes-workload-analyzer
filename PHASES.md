@@ -166,6 +166,33 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   `/readyz`'s own logic, the frontend, or any new infrastructure -- `/readyz` behaves correctly
   now only because the `Status` it reads is finally accurate. Rebuilt and redeployed to both live
   clusters; both confirmed healthy post-deploy.
+- 2026-09-26: PR18 (open, not merged) -- workload discovery coverage. D-007's ClusterRole has
+  granted `get/list/watch` on `statefulsets`/`daemonsets` since Phase 0, but the code only ever
+  listed Deployments (`k8sclient.ListDeployments`) and only ever resolved pods through the
+  Deployment-specific two-hop ReplicaSet join -- StatefulSets and DaemonSets were invisible to
+  the analyzer even though RBAC already allowed seeing them. `k8sclient.ListWorkloads` (renamed
+  from `ListDeployments`) now lists all three kinds, merged into one `WorkloadsSeen` count; a
+  failure listing any one kind still fails the whole call, so this stays one "kubernetes"
+  top-level source, not three (no change to the runner's failed/partial accounting).
+  `evidence.resolvePodNames` now branches on `Kind`: Deployment keeps the existing
+  `kube_pod_owner`→`kube_replicaset_owner` join; StatefulSet/DaemonSet use a direct
+  `kube_pod_owner{owner_kind=...}` query instead, since they own pods directly and the two-hop
+  join would structurally never match for them (a StatefulSet/DaemonSet never creates a
+  ReplicaSet); an unrecognized Kind fails closed with an error rather than silently returning
+  zero pods. 9 new tests (`internal/k8sclient`: all three kinds discovered and correctly tagged,
+  empty cluster, one kind's listing failing fails the whole call; `internal/evidence`: the exact
+  query shape issued per Kind, an unsupported Kind failing before querying, `ResolveContainers`
+  working end-to-end for both new kinds) -- proven against the real bug the same way as the
+  partial-workload-failure fix above: temporarily routing all three kinds through the old
+  Deployment-only join reproduced exactly the failure the new StatefulSet/DaemonSet tests exist
+  to catch, then passed again once reverted. Live-verified against real cluster objects, not just
+  fixtures: `workloads_seen` went from 17 to 21 (the real 1 StatefulSet + 3 DaemonSets already
+  running), zero new query errors, and `/api/timeseries` returned real non-empty CPU data for
+  Prometheus itself (StatefulSet), node-exporter and kube-proxy (DaemonSets) -- proving pod
+  resolution actually works end-to-end for both new kinds, not just that they're counted without
+  erroring. D-007 RBAC re-confirmed unaffected with a real token (`statefulsets`/`daemonsets`:
+  yes; `pods`/`secrets`: still no). `/readyz` unaffected (still reads `Status`, untouched here).
+  No change to D-006, rule thresholds, cost semantics, or the frontend.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

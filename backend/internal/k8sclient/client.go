@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -21,15 +20,18 @@ import (
 type Client interface {
 	// Healthy checks that the Kubernetes API is reachable and that this client's credentials
 	// actually work, using the same permission the analysis loop relies on (listing
-	// Deployments) rather than a separate endpoint that might be allowed by a different,
+	// workloads) rather than a separate endpoint that might be allowed by a different,
 	// unrelated default RBAC binding.
 	Healthy(ctx context.Context) error
 
-	// ListDeployments lists every Deployment across every namespace. Phase 3 uses this only as
-	// a connectivity/RBAC smoke test (its count becomes AnalysisRun.WorkloadsSeen); Phase 4's
-	// evidence builder will call the equivalent StatefulSet/DaemonSet listers too and build
-	// richer workload facts.
-	ListDeployments(ctx context.Context) ([]model.WorkloadRef, error)
+	// ListWorkloads lists every Deployment, StatefulSet and DaemonSet across every namespace
+	// (PR18, workload discovery coverage -- Phase 3/4 only listed Deployments). Its count
+	// becomes AnalysisRun.WorkloadsSeen, and the evidence builder resolves each returned
+	// WorkloadRef's live pods according to its Kind (internal/evidence's resolvePodNames). A
+	// failure listing any one of the three kinds fails the whole call, matching the existing
+	// "kubernetes" top-level source in internal/runner -- this stays one source, not three, so
+	// the runner's failed/partial accounting does not need to change.
+	ListWorkloads(ctx context.Context) ([]model.WorkloadRef, error)
 }
 
 type clientsetClient struct {
@@ -76,29 +78,35 @@ func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, error) {
 }
 
 func (c *clientsetClient) Healthy(ctx context.Context) error {
-	if _, err := c.ListDeployments(ctx); err != nil {
+	if _, err := c.ListWorkloads(ctx); err != nil {
 		return fmt.Errorf("k8sclient: health check failed: %w", err)
 	}
 	return nil
 }
 
-func (c *clientsetClient) ListDeployments(ctx context.Context) ([]model.WorkloadRef, error) {
-	list, err := c.clientset.AppsV1().Deployments(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+func (c *clientsetClient) ListWorkloads(ctx context.Context) ([]model.WorkloadRef, error) {
+	deployments, err := c.clientset.AppsV1().Deployments(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("k8sclient: listing deployments: %w", err)
 	}
-	return toWorkloadRefs(c.clusterID, list.Items), nil
-}
-
-func toWorkloadRefs(clusterID model.ClusterID, deployments []appsv1.Deployment) []model.WorkloadRef {
-	refs := make([]model.WorkloadRef, 0, len(deployments))
-	for _, d := range deployments {
-		refs = append(refs, model.WorkloadRef{
-			ClusterID: clusterID,
-			Namespace: d.Namespace,
-			Kind:      "Deployment",
-			Name:      d.Name,
-		})
+	statefulSets, err := c.clientset.AppsV1().StatefulSets(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("k8sclient: listing statefulsets: %w", err)
 	}
-	return refs
+	daemonSets, err := c.clientset.AppsV1().DaemonSets(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("k8sclient: listing daemonsets: %w", err)
+	}
+
+	refs := make([]model.WorkloadRef, 0, len(deployments.Items)+len(statefulSets.Items)+len(daemonSets.Items))
+	for _, d := range deployments.Items {
+		refs = append(refs, model.WorkloadRef{ClusterID: c.clusterID, Namespace: d.Namespace, Kind: "Deployment", Name: d.Name})
+	}
+	for _, s := range statefulSets.Items {
+		refs = append(refs, model.WorkloadRef{ClusterID: c.clusterID, Namespace: s.Namespace, Kind: "StatefulSet", Name: s.Name})
+	}
+	for _, ds := range daemonSets.Items {
+		refs = append(refs, model.WorkloadRef{ClusterID: c.clusterID, Namespace: ds.Namespace, Kind: "DaemonSet", Name: ds.Name})
+	}
+	return refs, nil
 }

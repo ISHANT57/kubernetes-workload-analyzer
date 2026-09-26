@@ -99,6 +99,18 @@ Read-only ClusterRole (`get/list/watch`) on namespaces, nodes, deployments, repl
 statefulsets, daemonsets, HPAs and events. No pods, secrets or configmaps, so the backend never sees
 pod specs or env vars. All metrics (usage, requests, restarts, OOM) come from Prometheus.
 
+**Workload discovery covers all three workload kinds** (`internal/k8sclient`'s `ListWorkloads`,
+PR18): Deployment, StatefulSet and DaemonSet, each contributing to `AnalysisRun.WorkloadsSeen`
+and going through the same rule engine. Pod resolution (Prometheus-only, no `pods` access) uses a
+different owner chain per Kind, since the two-hop Deployment path structurally cannot work for
+the other two: a Deployment owns pods through an intermediate ReplicaSet
+(`kube_pod_owner`→`kube_replicaset_owner` join), while a StatefulSet or DaemonSet owns its pods
+directly (`kube_pod_owner` already reports the right owner straight on the pod, one query, no
+join). Verified live against real objects, not just demo fixtures: the monitoring namespace's own
+Prometheus (a StatefulSet, deployed by the Prometheus Operator) and its node-exporter and
+kube-system's kube-proxy (DaemonSets) all resolve to real pods, containers and usage data through
+this path.
+
 ### Where it runs
 During development the backend runs on the host and reaches Prometheus via `kubectl port-forward`.
 It also runs in-cluster (Phase 7, `deploy/analyzer/`): a distroless multi-stage image

@@ -193,6 +193,26 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   erroring. D-007 RBAC re-confirmed unaffected with a real token (`statefulsets`/`daemonsets`:
   yes; `pods`/`secrets`: still no). `/readyz` unaffected (still reads `Status`, untouched here).
   No change to D-006, rule thresholds, cost semantics, or the frontend.
+- 2026-09-26: Dashboard shell redesign (owner-requested: "a professional SaaS dashboard for
+  the frontend UI"), extending the KPI/status-strip visual language from the earlier design pass
+  to the whole app rather than just Overview -- still D-006's information architecture
+  underneath, only the chrome changed. `Layout.tsx`/`.css`: top nav bar replaced with a left
+  sidebar app shell (the structural pattern shared by every reference dashboard discussed --
+  Grafana, Datadog, Stripe, Linear), collapsing to a top bar with a horizontally-scrolling nav
+  row on mobile, with the cluster switcher deliberately kept on its own always-visible row below
+  the nav rather than sharing its scroll area (a first pass put it in the same scrollable row and
+  it silently scrolled out of reach on a narrow viewport -- caught live, not assumed). One new
+  token, `--shadow-card` (light/dark variants), gives content cards a single consistent elevation
+  device -- chrome (sidebar) stays flat with a hairline border, so depth always signals "this is
+  content". `PlatformStatus` converts its "Latest analysis run" section to the same `KpiRow`/
+  `KpiTile` hero pattern Overview already uses, unifying the visual vocabulary instead of leaving
+  it in the older plain key-value layout. Table header/row styling refined once in `Card.css` so
+  every page's tables (Findings, Workloads, evidence) inherit it. Verified live via Playwright
+  against real findings data across every page (Overview, Findings, Finding Detail x2, Workloads,
+  Platform Status), desktop light, dark, and 390px mobile: zero console errors throughout: this
+  same pass also incidentally reconfirmed PR18 end-to-end in the real UI -- the `monitoring`
+  namespace's real Prometheus StatefulSet appears with a live resource finding on both the
+  Findings and Workloads pages. Rebuilt and redeployed to both live clusters.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

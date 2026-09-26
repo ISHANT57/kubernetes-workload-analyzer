@@ -1,5 +1,6 @@
 import { getLatestRun } from '../api/client'
 import { Card } from '../components/Card'
+import { KpiRow, KpiTile } from '../components/Kpi'
 import { ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
 import { formatDurationMs, formatRelativeTime } from '../format'
@@ -20,7 +21,14 @@ export function PlatformStatus() {
       <h1 className="page-title">Platform Status</h1>
       {run.stale && <StaleBanner />}
 
-      <Card title="Latest analysis run">
+      <KpiRow>
+        <KpiTile value={r.status} label="Run status" tone={r.status === 'complete' ? 'good' : r.status === 'partial' ? 'warning' : 'critical'} />
+        <KpiTile value={formatDurationMs(r.duration_ms)} label="Duration" tone="neutral" />
+        <KpiTile value={r.workloads_seen} label="Workloads seen" tone="neutral" />
+        <KpiTile value={r.findings_count} label="Findings produced" tone="neutral" />
+      </KpiRow>
+
+      <Card title="Run details" className="card--quiet">
         <div className="kv-grid">
           <div className="kv-item">
             <div className="kv-label">Run ID</div>
@@ -33,24 +41,8 @@ export function PlatformStatus() {
             <div className="kv-value">{r.cluster_id}</div>
           </div>
           <div className="kv-item">
-            <div className="kv-label">Status</div>
-            <div className="kv-value">{r.status}</div>
-          </div>
-          <div className="kv-item">
             <div className="kv-label">Started</div>
             <div className="kv-value">{formatRelativeTime(r.started_at)}</div>
-          </div>
-          <div className="kv-item">
-            <div className="kv-label">Duration</div>
-            <div className="kv-value">{formatDurationMs(r.duration_ms)}</div>
-          </div>
-          <div className="kv-item">
-            <div className="kv-label">Workloads seen</div>
-            <div className="kv-value">{r.workloads_seen}</div>
-          </div>
-          <div className="kv-item">
-            <div className="kv-label">Findings produced</div>
-            <div className="kv-value">{r.findings_count}</div>
           </div>
         </div>
       </Card>

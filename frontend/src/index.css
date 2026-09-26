@@ -22,6 +22,10 @@
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* One elevation device, used consistently on content cards only -- chrome (sidebar, topbar)
+     stays flat with a hairline border, so depth always means "this is content", not decoration. */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -44,6 +48,8 @@
     --color-muted-fg: #98a0ac;
     --color-accent-bg: #2a1f42;
     --color-accent-fg: #bb9ced;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24), 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 }
 

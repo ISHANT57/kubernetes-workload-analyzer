@@ -128,6 +128,17 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   (`/etc/sysctl.d/99-kind-multi-cluster.conf`), a documented laptop constraint
   (`docs/architecture.md`), not an application bug. Combined single-list aggregation across
   clusters deliberately not built (see D-008) until there's a concrete need for it.
+- 2026-09-26: Dashboard visual pass (owner-requested: adopt reference-dashboard visual
+  language -- spacing, KPI cards, status strips, hierarchy, polish -- while preserving D-006's
+  information architecture, not copying a raw-metrics/uptime-grid layout). New
+  `components/Kpi.tsx` (flat, severity-tinted hero tiles, one bold moment per page instead of
+  another bordered card) and `components/StatusStrip.tsx` (compact colored chips, one per
+  workload with an active finding, each linking to its real evidence -- deliberately excludes
+  workloads with no finding rather than padding in a fake "OK" chip, since there is no real
+  per-workload health signal to show without one, per R005's never-guess rule). Overview's
+  "Analysis run" card demoted to a quieter, dashed, transparent treatment so it doesn't compete
+  with the KPI hero above it. Verified live via Playwright against real findings data (desktop
+  light, dark, 390px mobile): zero console errors, all three renders confirmed by screenshot.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

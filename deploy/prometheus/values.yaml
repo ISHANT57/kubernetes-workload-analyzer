@@ -17,9 +17,15 @@ kubeApiServer: {enabled: false}
 
 grafana:
   admin: {existingSecret: grafana-admin}   # password never in values or git
+  # 384Mi OOMKilled Grafana on startup (exit 137, real live failure 2026-09-29) once
+  # kube-prometheus-stack 91.5.0 started shipping Grafana 13.2.2 -- newer than whatever version
+  # was current when this limit was first measured/set. Grafana 13.x builds an in-memory search
+  # index for its "unified storage" feature at startup ("Building index using memory" in its own
+  # logs), a real memory cost the old limit didn't account for. Bumped with headroom; re-measured
+  # live after the fix (docs/architecture.md).
   resources:
     requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 384Mi}
+    limits: {memory: 512Mi}
 
 kube-state-metrics:
   # Default collectors include secrets and configmaps (list/watch → Secret values).

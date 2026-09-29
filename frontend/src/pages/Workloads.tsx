@@ -55,7 +55,7 @@ export function Workloads() {
               const suggested = evidenceValue(f, isCPU ? 'cpu_suggested_request' : 'memory_suggested_request')
               return (
                 <tr key={f.id}>
-                  <td>
+                  <td className="truncate" title={`${f.workload.namespace}/${f.workload.name}`}>
                     <Link to={`/findings/${f.id}`}>
                       {f.workload.namespace}/{f.workload.name}
                     </Link>

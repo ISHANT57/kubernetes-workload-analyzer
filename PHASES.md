@@ -223,6 +223,28 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   applied via `helm upgrade` (not reinstall) on both clusters, live-remeasured after the fix
   (~407Mi real usage, confirming 384Mi was genuinely too tight, not a fluke). Both clusters'
   Grafana instances stable afterward, 0 restarts.
+- 2026-09-29: UI audit + Analytics page (owner-requested). Scope confirmed with the owner first:
+  a snapshot analytics view computed from the findings already on hand, not a historical-trends
+  feature -- that would need persisted finding history, which `docs/requirements.md` explicitly
+  lists as Out of MVP (D-004 no database, still PROPOSED), a real architecture decision the owner
+  would need to make, not a UI task to just build.
+  **Audit findings, both real, both caught live via Playwright, not assumed:** (1) the Findings
+  table at 390px had no explicit wrap control on its longer text columns (Problem, and Workloads'
+  full name column) -- the hidden, scrolled-off Problem column's wrapped text was silently
+  inflating every row to ~162px tall while only three narrow columns stayed visible, instead of a
+  predictable single-line-per-row table with normal horizontal scroll. Fixed with a shared
+  `.truncate` class (ellipsis + `title` attribute for the full text) applied to both. (2) Zero
+  intentional keyboard-focus styling anywhere in the app -- not broken (no `outline: none`
+  found), but inconsistent across browsers/themes. Added one `:focus-visible` treatment in
+  `index.css` for every interactive element.
+  **New `/analytics` page** (`Analytics.tsx`, `components/BarBreakdown.tsx`): every number is
+  computed client-side from the same `/api/findings` response already used elsewhere -- no new
+  backend endpoint, no persistence. KPI hero (total findings, workloads affected, findings
+  priced, total estimated potential difference), proportional bar breakdowns by severity/
+  category/rule and by workload (plain CSS bars, no charting dependency added for what is a
+  category count, not a time series), and a cost-impact summary carrying the same "Estimated,
+  never savings" disclaimer as a single finding's own cost card. Verified live via Playwright:
+  desktop, dark mode, 390px mobile, zero console errors on all three.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

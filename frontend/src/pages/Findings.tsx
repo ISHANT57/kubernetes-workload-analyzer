@@ -79,7 +79,9 @@ export function Findings() {
                     {f.container ? `/${f.container}` : ''}
                   </Link>
                 </td>
-                <td>{f.problem}</td>
+                <td className="truncate" title={f.problem}>
+                  {f.problem}
+                </td>
                 <td>
                   <ConfidenceBadge confidence={f.confidence} reason={f.confidence_reason} />
                 </td>

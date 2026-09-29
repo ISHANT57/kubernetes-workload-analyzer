@@ -130,6 +130,18 @@ table.data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+/* A long, wrappable cell (a finding's problem text, a StatefulSet's full name) forced every
+   other cell in its row to wrap too once the table's natural width exceeded a narrow viewport,
+   ballooning row height and pushing shorter columns out of view -- caught live at 390px, not
+   assumed. Single-line + ellipsis keeps row height predictable; the full text is still available
+   via the title attribute (hover on desktop, long-press on mobile) and the row's own link. */
+table.data-table td.truncate {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .filters {
   display: flex;
   gap: 0.6rem;
@@ -164,6 +176,17 @@ table.data-table tbody tr:last-child td {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.75rem;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.analytics-grid .card {
+  margin-bottom: 0;
 }
 
 .kv-item .kv-label {

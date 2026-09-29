@@ -4,6 +4,7 @@ import { Overview } from './pages/Overview'
 import { Findings } from './pages/Findings'
 import { FindingDetail } from './pages/FindingDetail'
 import { Workloads } from './pages/Workloads'
+import { Analytics } from './pages/Analytics'
 import { PlatformStatus } from './pages/PlatformStatus'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="findings" element={<Findings />} />
         <Route path="findings/:id" element={<FindingDetail />} />
         <Route path="workloads" element={<Workloads />} />
+        <Route path="analytics" element={<Analytics />} />
         <Route path="status" element={<PlatformStatus />} />
       </Route>
     </Routes>

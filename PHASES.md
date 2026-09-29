@@ -213,6 +213,16 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   same pass also incidentally reconfirmed PR18 end-to-end in the real UI -- the `monitoring`
   namespace's real Prometheus StatefulSet appears with a live resource finding on both the
   Findings and Workloads pages. Rebuilt and redeployed to both live clusters.
+- 2026-09-29: Bug fix -- Grafana OOMKilled on startup (exit 137) after both kind clusters were
+  rebuilt from scratch (host reset). `deploy/prometheus/values.yaml`'s Grafana memory limit
+  (384Mi) was measured and set against whatever Grafana version was current back in Phase 1;
+  kube-prometheus-stack 91.5.0 now ships Grafana 13.2.2, which builds an in-memory search index
+  for its "unified storage" feature at startup ("Building index using memory" in its own logs) --
+  a real memory cost the old limit never accounted for. Confirmed via `kubectl describe pod`
+  (`lastState.terminated.reason: OOMKilled`), not guessed. Limit raised to 512Mi with headroom;
+  applied via `helm upgrade` (not reinstall) on both clusters, live-remeasured after the fix
+  (~407Mi real usage, confirming 384Mi was genuinely too tight, not a fluke). Both clusters'
+  Grafana instances stable afterward, 0 restarts.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

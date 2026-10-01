@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { Breadcrumb } from './Breadcrumb'
 import { ClusterSwitcher } from './ClusterSwitcher'
 import './Layout.css'
 
@@ -32,7 +33,10 @@ export function Layout() {
         </div>
       </aside>
       <main className="content">
-        <Outlet />
+        <div className="content-inner">
+          <Breadcrumb />
+          <Outlet />
+        </div>
       </main>
     </div>
   )

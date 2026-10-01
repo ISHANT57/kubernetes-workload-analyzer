@@ -1,0 +1,10 @@
+.breadcrumb {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.breadcrumb-sep {
+  margin: 0 0.4rem;
+  opacity: 0.6;
+}

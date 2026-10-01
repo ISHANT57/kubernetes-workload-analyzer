@@ -245,6 +245,19 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   category count, not a time series), and a cost-impact summary carrying the same "Estimated,
   never savings" disclaimer as a single finding's own cost card. Verified live via Playwright:
   desktop, dark mode, 390px mobile, zero console errors on all three.
+- 2026-10-01: Breadcrumb + workload heatmap grid (owner-requested, pointing at a Datadog-style
+  reference dashboard). Scope confirmed first, same as every other reference-UI request this
+  project has had: adopt the two genuinely transferable pieces, decline the raw-count-tile
+  pattern that would reintroduce "data without insight" (D-006's whole reason for existing).
+  `components/Breadcrumb.tsx` (new): `{cluster_id} / {page}` wayfinding line above every page's
+  content, reusing the same `/api/clusters` call the switcher already makes. `StatusStrip`
+  (the chip strip from the earlier design pass) rewritten in place to a dense CSS-grid heatmap of
+  fixed-size colored squares instead of wrapped text chips -- same underlying contract as before
+  (one square per workload with an active finding, colored by worst severity, links to the real
+  finding, workloads with no finding excluded rather than padded in as a fake "OK" square per
+  R005), only the layout got denser; declined copying the reference's raw CPU/Memory-gradient
+  heatmap, which carries no evidence or explanation. Verified live via Playwright across light,
+  dark and 390px mobile: zero console errors.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

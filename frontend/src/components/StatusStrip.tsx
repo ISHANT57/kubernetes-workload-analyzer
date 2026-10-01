@@ -12,12 +12,14 @@ interface WorkloadStatus {
   count: number
 }
 
-/** A compact, at-a-glance strip of every workload that currently has a finding, one chip each,
- * colored by its worst severity -- the visual language of a status/uptime strip, but every chip
- * is a real evidence-backed finding, not a synthetic up/down check. Deliberately does not
- * include workloads with no finding: there is no real "is this fine" signal to render for them
- * without guessing (R005 -- never guess through missing data), so they are left out rather than
- * padded in as a fake "OK" chip. */
+/** A dense heatmap grid, one small square per workload that currently has a finding, colored by
+ * its worst severity -- every square is a real evidence-backed finding, not a synthetic up/down
+ * check or a raw metric-color gradient. Deliberately does not include workloads with no finding:
+ * there is no real "is this fine" signal to render for them without guessing (R005 -- never
+ * guess through missing data), so they are left out rather than padded in as a fake "OK" square.
+ * Each square carries its full identity via title/aria-label (hover on desktop, screen reader
+ * always) and links straight to its evidence, same contract as the earlier chip-strip version
+ * this replaced -- only the layout got denser. */
 export function StatusStrip({ findings }: { findings: Finding[] }) {
   if (findings.length === 0) return null
 
@@ -37,9 +39,14 @@ export function StatusStrip({ findings }: { findings: Finding[] }) {
   return (
     <div className="status-strip" role="list" aria-label="Workloads with findings">
       {statuses.map((s) => (
-        <Link key={s.key} to={`/findings/${s.findingId}`} className={`status-chip status-chip-${s.severity}`} role="listitem" title={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}>
-          {s.label}
-        </Link>
+        <Link
+          key={s.key}
+          to={`/findings/${s.findingId}`}
+          className={`status-chip status-chip-${s.severity}`}
+          role="listitem"
+          title={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
+          aria-label={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
+        />
       ))}
     </div>
   )

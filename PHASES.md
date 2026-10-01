@@ -283,6 +283,28 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   closing the last gap in the project's own integration-test ground truth. No change to R001-R004,
   cost semantics, `/readyz`, or D-007's RBAC scope (still zero Kubernetes API calls from the
   evidence layer).
+- 2026-10-01: Frontend design-system refactor (owner-requested: match the reference dashboards'
+  production look, same functionality). **Frontend-only by construction** -- the diff touches
+  `frontend/src` and nothing else: no backend, no API, no deploy manifests, no routing change,
+  no new dependency (`package.json` untouched), and the backend suite still passes unchanged.
+  One token system in `index.css` (surface/text/status scales, spacing, radius, one shadow,
+  dark-first with full light parity) that every component now reads from -- no component
+  hard-codes a colour. New `components/Icons.tsx`: eight hand-rolled inline SVGs rather than
+  pulling in lucide-react, since AGENTS.md requires a stated reason per dependency and "eight
+  glyphs" is not one (the exported Figma reference project carries 40+ dependencies for the same
+  job). App shell gained a top bar (breadcrumb left, cluster switcher right) over the existing
+  sidebar, which picked up icons; `Card` gained a real header slot (title/subtitle/actions) so
+  panel headers are consistent everywhere; `KpiTile` gained an icon, a one-line hint and a tone
+  accent edge; Overview moved to the reference's two-column shape -- ranked findings plus a
+  "Needs attention" rail whose cards show each finding's own top evidence values. Three real
+  bugs found and fixed during live verification, not assumed: uPlot strokes a canvas where a
+  `var(--token)` is not a valid colour (the chart would have drawn nothing in the new theme, so
+  colours are now resolved against computed style, including axis and gridline strokes, which
+  previously used uPlot's light-theme defaults and were invisible on the dark panel); the card
+  header crammed title and filters into one row at 390px and overflowed the panel edge; and four
+  full-width KPI cards pushed the actual findings a screen and a half down on a phone (now
+  two-up). Verified live against real cluster findings across all five pages, desktop dark,
+  desktop light and 390px mobile: zero console errors throughout.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

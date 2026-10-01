@@ -1,43 +1,191 @@
+/* ---------------------------------------------------------------------------------------
+   Panels. One elevation, one radius, a hairline border -- the low-noise look the reference
+   dashboards get by keeping every panel identical and letting content provide the contrast.
+   --------------------------------------------------------------------------------------- */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
-  padding: 1.1rem 1.25rem;
-  margin-bottom: 1.25rem;
-  overflow-x: auto; /* safety net for wide tables on narrow viewports; checked live at 390px */
+  margin-bottom: var(--space-5);
+  overflow: hidden;
 }
 
-/* A visually quieter card for secondary, self-referential content (the analyzer's own run
-   status) that should not compete with the KPI hero or the findings above it -- hierarchy
-   through restraint, not another bordered box of equal weight. */
-.card--quiet {
-  background: transparent;
-  border-style: dashed;
-  box-shadow: none;
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.card--quiet .card-title {
-  color: var(--color-text-muted);
-  font-weight: 600;
+.card-heading {
+  min-width: 0;
 }
 
 .card-title {
-  margin: 0 0 0.85rem;
-  font-size: 0.95rem;
+  margin: 0;
+  font-size: 0.92rem;
   font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.card-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* Title and controls share one row only while there is room for both: below that the controls
+   stack under the heading instead of squeezing it into a two-word column and overflowing the
+   panel edge -- caught live at 390px. */
+@media (max-width: 720px) {
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .card-actions {
+    flex-wrap: wrap;
+  }
+}
+
+.card-body {
+  padding: var(--space-5);
+  overflow-x: auto; /* wide tables scroll inside the panel, never widen the page */
+}
+
+/* Rows and tables sit flush against the panel edges: the panel border is their frame, and each
+   row brings its own padding so hover highlights span the full panel width. */
+.card--flush .card-body {
+  padding: 0;
+}
+
+.card--flush .card-body > .note {
+  padding: var(--space-5);
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------------------
+   Attention rail: the most severe findings, each with the evidence behind it
+   --------------------------------------------------------------------------------------- */
+.attention-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.attention-card {
+  display: block;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-sunken);
+  text-decoration: none;
+  color: inherit;
+}
+
+.attention-card:hover {
+  border-color: var(--color-accent);
+}
+
+.attention-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.attention-name {
+  font-weight: 650;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-problem {
+  margin: var(--space-2) 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.attention-evidence {
+  margin: var(--space-3) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.attention-evidence-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.75rem;
+}
+
+.attention-evidence-row dt {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attention-evidence-row dd {
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A quieter panel for secondary, self-referential content (the analyzer's own run status) that
+   should not compete with the KPI row or the findings above it. */
+.card--quiet {
+  background: transparent;
+  box-shadow: none;
+  border-style: dashed;
+}
+
+.card--quiet .card-title {
+  color: var(--color-text-secondary);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Page heading
+   --------------------------------------------------------------------------------------- */
+.page-head {
+  margin-bottom: var(--space-5);
 }
 
 .page-title {
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  margin: 0 0 1.25rem;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
+.page-subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Inline stat row (used inside panels, distinct from the KPI card row)
+   --------------------------------------------------------------------------------------- */
 .stat-row {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 
@@ -46,16 +194,16 @@
 }
 
 .stat-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1.1;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
 .stat-label {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--color-text-muted);
-  margin-top: 0.2rem;
+  margin-top: 2px;
 }
 
 .stat-value.stat-critical {
@@ -68,140 +216,198 @@
   color: var(--color-good-fg);
 }
 
+/* ---------------------------------------------------------------------------------------
+   Finding rows (Overview's ranked list)
+   --------------------------------------------------------------------------------------- */
 .finding-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
 }
 
 .finding-row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
   text-decoration: none;
   color: inherit;
   font-size: 0.85rem;
 }
 
+.finding-list li:last-child .finding-row {
+  border-bottom: none;
+}
+
 .finding-row:hover {
-  background: var(--color-bg);
+  background: var(--color-surface-raised);
 }
 
 .finding-row .workload-name {
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .finding-row .problem {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.card-footer-link {
+  display: block;
+  padding: var(--space-3) var(--space-5);
+  font-size: 0.82rem;
+  color: var(--color-accent);
+  text-decoration: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.card-footer-link:hover {
+  background: var(--color-surface-raised);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Tables
+   --------------------------------------------------------------------------------------- */
 table.data-table th,
 table.data-table td {
   text-align: left;
-  padding: 0.6rem 0.7rem;
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
-  font-size: 0.84rem;
+  font-size: 0.83rem;
 }
 
 table.data-table th {
   color: var(--color-text-muted);
   font-weight: 600;
-  font-size: 0.72rem;
+  font-size: 0.71rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom-width: 2px;
+  letter-spacing: 0.05em;
+  background: var(--color-surface-sunken);
+  white-space: nowrap;
 }
 
 table.data-table tbody tr:hover {
-  background: var(--color-bg);
+  background: var(--color-surface-raised);
 }
 
 table.data-table tbody tr:last-child td {
   border-bottom: none;
 }
 
+table.data-table td.num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.muted-cell {
+  color: var(--color-text-muted);
+}
+
 /* A long, wrappable cell (a finding's problem text, a StatefulSet's full name) forced every
    other cell in its row to wrap too once the table's natural width exceeded a narrow viewport,
    ballooning row height and pushing shorter columns out of view -- caught live at 390px, not
-   assumed. Single-line + ellipsis keeps row height predictable; the full text is still available
+   assumed. Single-line + ellipsis keeps row height predictable; the full text stays available
    via the title attribute (hover on desktop, long-press on mobile) and the row's own link. */
 table.data-table td.truncate {
-  max-width: 260px;
+  max-width: 520px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+@media (max-width: 1100px) {
+  table.data-table td.truncate {
+    max-width: 260px;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------
+   Form controls
+   --------------------------------------------------------------------------------------- */
 .filters {
   display: flex;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin-bottom: 1rem;
 }
 
 .filters select,
-.filters input {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+.filters input,
+.select-control {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
   color: var(--color-text);
-  border-radius: 6px;
-  padding: 0.35rem 0.6rem;
-  font-size: 0.82rem;
+  border-radius: var(--radius-sm);
+  padding: 0.35rem var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 500;
 }
 
-.evidence-table {
-  margin-top: 0.5rem;
+.filters select:hover,
+.select-control:hover {
+  border-color: var(--color-accent);
 }
 
+/* ---------------------------------------------------------------------------------------
+   Evidence table, key/value grid, cost block
+   --------------------------------------------------------------------------------------- */
 .evidence-table code {
   font-size: 0.72rem;
   color: var(--color-text-muted);
   /* PromQL queries are long, unbroken strings (no spaces) that would otherwise force the table
-     wider than its card on narrow viewports -- checked live at 390px and found overflowing. */
+     wider than its panel on narrow viewports -- checked live at 390px and found overflowing. */
   word-break: break-all;
   white-space: normal;
 }
 
 .kv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
-}
-
-.analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 1.25rem;
-}
-
-.analytics-grid .card {
-  margin-bottom: 0;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--space-4);
 }
 
 .kv-item .kv-label {
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .kv-item .kv-value {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
+  margin-top: 2px;
+}
+
+.cost-box {
+  border-left: 3px solid var(--color-accent);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.cost-assumptions {
+  margin: var(--space-3) 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.note {
+  margin: var(--space-3) 0 0;
+  font-size: 0.79rem;
+  color: var(--color-text-muted);
 }
 
 .back-link {
   display: inline-block;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
   font-size: 0.82rem;
   color: var(--color-text-muted);
   text-decoration: none;
@@ -211,24 +417,39 @@ table.data-table td.truncate {
   color: var(--color-text);
 }
 
-.cost-box {
-  border-left: 3px solid var(--color-info-fg);
-  padding: 0.6rem 0.9rem;
-  background: var(--color-bg);
-  border-radius: 0 6px 6px 0;
-}
-
-.cost-assumptions {
-  margin: 0.5rem 0 0;
-  padding-left: 1.1rem;
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-}
-
 .section-label {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: var(--color-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin: 1rem 0 0.4rem;
+  letter-spacing: 0.05em;
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+/* ---------------------------------------------------------------------------------------
+   Layout grids
+   --------------------------------------------------------------------------------------- */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.analytics-grid .card {
+  margin-bottom: 0;
+}
+
+/* Main panel + right rail, the two-column shape the reference dashboards use for
+   "everything" on the left and "what needs attention now" on the right. */
+.split-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .split-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

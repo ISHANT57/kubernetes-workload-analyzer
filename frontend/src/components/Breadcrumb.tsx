@@ -35,11 +35,11 @@ export function Breadcrumb() {
 
   return (
     <div className="breadcrumb">
-      {clusterId ?? '…'}
+      <span className="breadcrumb-cluster">{clusterId ?? '…'}</span>
       {page && (
         <>
           <span className="breadcrumb-sep">/</span>
-          {page}
+          <span className="breadcrumb-page">{page}</span>
         </>
       )}
     </div>

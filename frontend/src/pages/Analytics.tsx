@@ -3,6 +3,7 @@ import { getFindings } from '../api/client'
 import { Card } from '../components/Card'
 import { KpiRow, KpiTile } from '../components/Kpi'
 import { BarBreakdown } from '../components/BarBreakdown'
+import { IconCoin, IconCube, IconFindings, IconPulse } from '../components/Icons'
 import { ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
 import { formatUSD } from '../format'
@@ -13,6 +14,7 @@ const RULE_LABEL: Record<string, string> = {
   R002: 'R002 · Memory over-requested',
   R003: 'R003 · Frequent restarts',
   R004: 'R004 · OOM',
+  R006: 'R006 · Unschedulable',
 }
 
 /** Every number here is computed client-side from the findings already returned by
@@ -31,10 +33,13 @@ export function Analytics() {
   if (fs.length === 0) {
     return (
       <div>
-        <h1 className="page-title">Analytics</h1>
+        <div className="page-head">
+          <h1 className="page-title">Analytics</h1>
+          <p className="page-subtitle">Aggregate view of the current findings.</p>
+        </div>
         {findings.stale && <StaleBanner />}
         <Card>
-          <p>No findings right now, so there is nothing to summarize. Either everything is right-sized and healthy, or there isn't enough data yet.</p>
+          <p className="note">No findings right now, so there is nothing to summarize. Either everything is right-sized and healthy, or there isn't enough data yet.</p>
         </Card>
       </div>
     )
@@ -69,18 +74,25 @@ export function Analytics() {
     .slice(0, 8)
   const workloadBar = topWorkloads.map(([label, count]) => ({ label, count, tone: 'neutral' as const }))
 
-  const distinctWorkloads = byWorkload.size
-
   return (
     <div>
-      <h1 className="page-title">Analytics</h1>
+      <div className="page-head">
+        <h1 className="page-title">Analytics</h1>
+        <p className="page-subtitle">Aggregates computed from the current findings — a snapshot, not a trend over time.</p>
+      </div>
       {findings.stale && <StaleBanner />}
 
       <KpiRow>
-        <KpiTile value={fs.length} label="Total findings" tone="neutral" />
-        <KpiTile value={distinctWorkloads} label="Workloads affected" tone="neutral" />
-        <KpiTile value={priced.length} label="Findings priced" tone="neutral" />
-        <KpiTile value={formatUSD(totalPotentialDifference)} label="Est. potential difference" tone={totalPotentialDifference > 0 ? 'info' : 'neutral'} />
+        <KpiTile value={fs.length} label="Total findings" hint="Across all rules" tone="neutral" icon={<IconFindings />} />
+        <KpiTile value={byWorkload.size} label="Workloads affected" hint="With at least one finding" tone="neutral" icon={<IconCube />} />
+        <KpiTile value={priced.length} label="Findings priced" hint={`${fs.length - priced.length} unpriced`} tone="neutral" icon={<IconPulse />} />
+        <KpiTile
+          value={formatUSD(totalPotentialDifference)}
+          label="Est. difference"
+          hint="Estimated, never savings"
+          tone={totalPotentialDifference > 0 ? 'info' : 'neutral'}
+          icon={<IconCoin />}
+        />
       </KpiRow>
 
       <div className="analytics-grid">
@@ -102,30 +114,35 @@ export function Analytics() {
       </div>
 
       {workloadBar.length > 0 && (
-        <Card title={`Most findings per workload${byWorkload.size > topWorkloads.length ? ` (top ${topWorkloads.length} of ${byWorkload.size})` : ''}`}>
+        <Card
+          title="Most findings per workload"
+          subtitle={byWorkload.size > topWorkloads.length ? `Top ${topWorkloads.length} of ${byWorkload.size}` : undefined}
+        >
           <BarBreakdown items={workloadBar} />
         </Card>
       )}
 
       {priced.length > 0 && (
-        <Card title="Estimated cost impact (all priced findings)">
-          <div className="kv-grid">
-            <div className="kv-item">
-              <div className="kv-label">Current estimated allocation</div>
-              <div className="kv-value">{formatUSD(totalAllocation)}</div>
-            </div>
-            <div className="kv-item">
-              <div className="kv-label">Optimized estimated allocation</div>
-              <div className="kv-value">{formatUSD(totalOptimized)}</div>
-            </div>
-            <div className="kv-item">
-              <div className="kv-label">Potential difference</div>
-              <div className="kv-value">{formatUSD(totalPotentialDifference)}</div>
+        <Card title="Estimated cost impact" subtitle="Summed across every priced finding">
+          <div className="cost-box">
+            <div className="kv-grid">
+              <div className="kv-item">
+                <div className="kv-label">Current estimated allocation</div>
+                <div className="kv-value">{formatUSD(totalAllocation)}</div>
+              </div>
+              <div className="kv-item">
+                <div className="kv-label">Optimized estimated allocation</div>
+                <div className="kv-value">{formatUSD(totalOptimized)}</div>
+              </div>
+              <div className="kv-item">
+                <div className="kv-label">Potential difference</div>
+                <div className="kv-value">{formatUSD(totalPotentialDifference)}</div>
+              </div>
             </div>
           </div>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+          <p className="note">
             Sum across {priced.length} priced finding{priced.length === 1 ? '' : 's'} ({fs.length - priced.length} unpriced). Each finding's own assumptions are on its{' '}
-            <Link to="/findings">detail page</Link>. Reducing a request does not by itself reduce a cloud bill -- it only does if the freed capacity lets a node be removed,
+            <Link to="/findings">detail page</Link>. Reducing a request does not by itself reduce a cloud bill — it only does if the freed capacity lets a node be removed,
             downsized, or not added.
           </p>
         </Card>

@@ -1,10 +1,26 @@
 .breadcrumb {
-  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.82rem;
   color: var(--color-text-muted);
-  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
+.breadcrumb-cluster {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .breadcrumb-sep {
-  margin: 0 0.4rem;
-  opacity: 0.6;
+  opacity: 0.5;
+}
+
+.breadcrumb-page {
+  color: var(--color-text);
+  font-weight: 500;
+  white-space: nowrap;
 }

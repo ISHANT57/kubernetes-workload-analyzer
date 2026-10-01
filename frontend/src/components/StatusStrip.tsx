@@ -36,18 +36,34 @@ export function StatusStrip({ findings }: { findings: Finding[] }) {
 
   const statuses = Array.from(byWorkload.values()).sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])
 
+  const legend = (['critical', 'warning', 'info'] as Severity[])
+    .map((sev) => ({ sev, count: statuses.filter((s) => s.severity === sev).length }))
+    .filter((l) => l.count > 0)
+
   return (
-    <div className="status-strip" role="list" aria-label="Workloads with findings">
-      {statuses.map((s) => (
-        <Link
-          key={s.key}
-          to={`/findings/${s.findingId}`}
-          className={`status-chip status-chip-${s.severity}`}
-          role="listitem"
-          title={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
-          aria-label={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
-        />
-      ))}
+    <div>
+      <div className="status-strip" role="list" aria-label="Workloads with findings">
+        {statuses.map((s) => (
+          <Link
+            key={s.key}
+            to={`/findings/${s.findingId}`}
+            className={`status-chip status-chip-${s.severity}`}
+            role="listitem"
+            title={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
+            aria-label={`${s.label}: ${s.count} finding${s.count === 1 ? '' : 's'}, worst is ${s.severity}`}
+          />
+        ))}
+      </div>
+      {/* A grid of unlabelled colour needs a key, or it is decoration. Counts come from the same
+          grouped findings the squares do -- nothing here is a second source of truth. */}
+      <div className="strip-legend">
+        {legend.map((l) => (
+          <span className="strip-legend-item" key={l.sev}>
+            <span className={`strip-legend-swatch status-chip-${l.sev}`} />
+            {l.count} {l.sev}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

@@ -1,58 +1,102 @@
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  /* 150px min keeps the row two-up on a 390px phone instead of four full-width cards pushing
+     the actual findings a screen and a half down -- checked live at that width. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+@media (min-width: 861px) {
+  .kpi-row {
+    gap: var(--space-4);
+  }
 }
 
 .kpi-tile {
-  border-radius: 8px;
-  padding: 0.9rem 1.1rem;
-  border-left: 3px solid var(--color-border);
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+  position: relative;
+  overflow: hidden;
 }
 
-.kpi-value {
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+/* The tone accent is a 3px edge, not a filled card: colour marks severity without turning the
+   whole row into a traffic light. */
+.kpi-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--color-border-strong);
+}
+
+.kpi-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .kpi-label {
-  margin-top: 0.35rem;
-  font-size: 0.8rem;
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.kpi-icon {
+  display: inline-flex;
+  color: var(--color-text-muted);
+  opacity: 0.8;
+}
+
+.kpi-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-hint {
+  margin-top: var(--space-2);
+  font-size: 0.76rem;
   color: var(--color-text-muted);
 }
 
-.kpi-tile-critical {
-  border-left-color: var(--color-critical-fg);
+.kpi-tile-critical::before {
+  background: var(--color-critical-fg);
 }
-.kpi-tile-critical .kpi-value {
+.kpi-tile-critical .kpi-value,
+.kpi-tile-critical .kpi-icon {
   color: var(--color-critical-fg);
 }
 
-.kpi-tile-warning {
-  border-left-color: var(--color-warning-fg);
+.kpi-tile-warning::before {
+  background: var(--color-warning-fg);
 }
-.kpi-tile-warning .kpi-value {
+.kpi-tile-warning .kpi-value,
+.kpi-tile-warning .kpi-icon {
   color: var(--color-warning-fg);
 }
 
-.kpi-tile-info {
-  border-left-color: var(--color-info-fg);
+.kpi-tile-info::before {
+  background: var(--color-info-fg);
 }
-.kpi-tile-info .kpi-value {
+.kpi-tile-info .kpi-value,
+.kpi-tile-info .kpi-icon {
   color: var(--color-info-fg);
 }
 
-.kpi-tile-good {
-  border-left-color: var(--color-good-fg);
+.kpi-tile-good::before {
+  background: var(--color-good-fg);
 }
-.kpi-tile-good .kpi-value {
+.kpi-tile-good .kpi-value,
+.kpi-tile-good .kpi-icon {
   color: var(--color-good-fg);
-}
-
-.kpi-tile-neutral {
-  border-left-color: var(--color-border);
 }

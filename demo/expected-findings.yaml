@@ -3,7 +3,7 @@
 # just kubectl top). Used to drive the Phase 4 integration test: for each scenario, the
 # analyzer's findings for that workload must match `expect` below.
 #
-# Thresholds referenced here are the R001-R005 definitions in docs/requirements.md §3.
+# Thresholds referenced here are the R001-R006 definitions in docs/requirements.md §3.
 # All CPU/memory figures below are one real MEASURED sample; duty-cycled workloads vary
 # run to run -- treat "observed" as an illustrative range, not an exact replay target.
 
@@ -109,5 +109,6 @@ scenarios:
       event: "FailedScheduling: 0/1 nodes are available: 1 Insufficient cpu"
     mechanism: "CPU request exceeds total node capacity (12 CPU)"
     expect:
-      rules_fired: []          # no MVP rule consumes this yet (backlog: unschedulable/Pending rule)
-      notes: "Kept for the Phase-1-scoped scheduling-health backlog rule and for dashboard testing (a Pending workload has no usage data at all)."
+      rules_fired: [R006]
+      severity: critical
+      notes: "R006 (unschedulable/Pending), added after Phase 8 -- the backlog item this fixture was originally kept for. Fires on pod phase=Pending AND kube_pod_status_unschedulable=1 together (both verified live, 2026-10-01: phase=Pending=1, unschedulable=1, cpu_request=64 cores). The exact FailedScheduling event text above is not queried (D-007 grants no Kubernetes Events access; evidence is Prometheus-only) -- the requested cpu_request is attached as evidence instead, letting a reader judge the likely cause without the rule asserting one it cannot verify."

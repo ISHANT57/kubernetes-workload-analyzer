@@ -185,6 +185,7 @@ func (b *Builder) Build(ctx context.Context, workload analyzermodel.WorkloadRef,
 	b.buildRestarts(ctx, &ev, podSelector, now)
 	b.buildTerminationReasons(ctx, &ev, podSelector, now)
 	b.buildHPA(ctx, &ev, now)
+	b.buildScheduling(ctx, &ev, podSelector, now)
 
 	return ev
 }
@@ -326,6 +327,33 @@ func (b *Builder) buildTerminationReasons(ctx context.Context, ev *WorkloadEvide
 		ev.QueryErrors = append(ev.QueryErrors, fmt.Sprintf("waiting reason: %v", err))
 	} else if reason, ok := firstLabel(vec, "reason"); ok {
 		ev.WaitingReason = reason
+	}
+}
+
+// buildScheduling checks whether any of this workload's resolved pods are Pending and
+// unschedulable (R006) -- both are pod-level series (no container label), unlike the
+// per-container queries above. Both metrics are known VERIFIED-available via KSM
+// (docs/requirements.md's measurement model); checked live against the real demo/pending fixture
+// before this was written: phase="Pending"==1 and status_unschedulable==1 both present, with the
+// pod's own requested CPU (64 cores, exceeding the node's real capacity) available as evidence
+// the reader can use to judge why, without this code asserting a specific cause it cannot verify
+// (D-007 grants no Kubernetes Events access, so the exact FailedScheduling message is not
+// queried here).
+func (b *Builder) buildScheduling(ctx context.Context, ev *WorkloadEvidence, podSelector string, now time.Time) {
+	ns := ev.Workload.Namespace
+
+	pendingQuery := fmt.Sprintf(`kube_pod_status_phase{namespace=%q,pod=~%q,phase="Pending"}`, ns, podSelector)
+	if vec, err := b.Prom.QueryInstant(ctx, pendingQuery); err != nil {
+		ev.QueryErrors = append(ev.QueryErrors, fmt.Sprintf("pod pending phase: %v", err))
+	} else if v, ok := firstValue(vec); ok && v == 1 {
+		ev.Scheduling.Pending = true
+	}
+
+	unschedulableQuery := fmt.Sprintf(`kube_pod_status_unschedulable{namespace=%q,pod=~%q}`, ns, podSelector)
+	if vec, err := b.Prom.QueryInstant(ctx, unschedulableQuery); err != nil {
+		ev.QueryErrors = append(ev.QueryErrors, fmt.Sprintf("pod unschedulable: %v", err))
+	} else if v, ok := firstValue(vec); ok && v == 1 {
+		ev.Scheduling.Unschedulable = true
 	}
 }
 

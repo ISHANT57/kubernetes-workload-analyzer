@@ -81,6 +81,7 @@ allowed to fire quickly.
 | R003 | Frequent restarts | restart increase ≥ 3 in 1h OR ≥ 10 in 24h; waiting reason (e.g. CrashLoopBackOff) attached as evidence when present | 1h / 24h | restart counter present |
 | R004 | OOM | last_terminated_reason == OOMKilled AND restarts increased in the last 24h | 24h | termination reason + restart counter present |
 | R005 | Data quality gate | `insufficient`: below 80% coverage even at the 30m minimum tier (or zero data) · `stale`: newest sample older than 5m · `ok`: at least the 30m tier clears 80% | 30m / 24h / 7d tiers | — |
+| R006 | Unschedulable / Pending | pod phase == Pending AND `kube_pod_status_unschedulable` == 1 (both required together -- Pending alone is a normal few-second state every pod passes through on start) | — | pod phase + scheduler status both present |
 
 **Not implemented in the MVP** (documented here so it isn't silently forgotten, not treated as
 done): R004's original design also included "max(working set) ≥ 0.9 × limit" as a warning-level
@@ -131,9 +132,11 @@ slows it.
 - **JVM and other self-managed-heap runtimes:** working set reflects configured heap, not need. They cannot be detected reliably, so support an opt-out annotation and cap memory confidence at MEDIUM.
 - **Recently changed workloads:** if requests changed inside the window, only evaluate data since the change.
 
-### Backlog (after R005)
-CrashLoopBackOff-only, image pull failure, unschedulable/Pending, deployment unavailable, node
-conditions, CPU throttled (under-provisioned), memory growth.
+### Backlog (after R006)
+CrashLoopBackOff-only, image pull failure, deployment unavailable, node conditions, CPU throttled
+(under-provisioned), memory growth. (unschedulable/Pending was the oldest item on this list --
+built as R006, 2026-10-01, Prometheus-only per D-007; the exact FailedScheduling event text is
+not available without Kubernetes Events access, which is out of scope.)
 
 ## 4. Cost model
 
@@ -185,7 +188,7 @@ OOM lab) covers the memory scenarios directly.
 | 6 | `crashloop` | `sh -c "exit 1"` | `Error`, exit 1, 5 restarts, CrashLoopBackOff | R003 |
 | 7 | `hpa-coupled` | resource-consumer, real HPA (target 70% CPU util), no load driver | idle (~0m/5Mi), `kube_horizontalpodautoscaler_info` present | R001 replaced by "HPA-coupled" caveat + HPA-neutral request |
 | 8 | `new-workload` | agnhost pause, deployed with the others | idle, age < 10 min at check time | R005 `insufficient`, no R001/R002 |
-| 9 | `pending` | CPU request `64` | `FailedScheduling: Insufficient cpu`, pod Pending | no MVP rule; backlog scheduling-health rule |
+| 9 | `pending` | CPU request `64` | `FailedScheduling: Insufficient cpu`, pod Pending, `kube_pod_status_unschedulable=1` | R006 |
 
 Notes:
 - Fixture #7 does not drive load: the HPA-coupled *caveat logic* is what's under test here, not

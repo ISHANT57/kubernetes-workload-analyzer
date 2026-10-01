@@ -146,9 +146,12 @@ func newWorkloadEvidence() evidence.WorkloadEvidence {
 func pendingEvidence() evidence.WorkloadEvidence {
 	return evidence.WorkloadEvidence{
 		Workload: model.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "pending"},
-		CPU:      evidence.CPUEvidence{DataQuality: model.DataQuality{Status: model.DataQualityInsufficient}},
+		CPU:      evidence.CPUEvidence{RequestCores: 64, HasRequest: true, DataQuality: model.DataQuality{Status: model.DataQualityInsufficient}},
 		Mem:      evidence.MemEvidence{DataQuality: model.DataQuality{Status: model.DataQualityInsufficient}},
 		// HasRestartsData false: a pod that never scheduled has no restart counter at all.
+		// Pending+Unschedulable both true, matching the real demo/pending fixture's live-verified
+		// Prometheus state (cpu_request=64 cores genuinely exceeds the node's real capacity).
+		Scheduling: evidence.SchedulingEvidence{Pending: true, Unschedulable: true},
 	}
 }
 
@@ -242,10 +245,44 @@ func TestRules_NewWorkload_InsufficientData_NoResourceFindings(t *testing.T) {
 	}
 }
 
-func TestRules_Pending_NoFindings(t *testing.T) {
+func TestRules_Pending_FiresR006Only(t *testing.T) {
 	got := fired(pendingEvidence())
-	if len(got) != 0 {
-		t.Errorf("pending fired %v, want no findings (no MVP rule covers unschedulable pods yet)", got)
+	if len(got) != 1 || !got["R006"] {
+		t.Errorf("pending fired %v, want exactly R006", got)
+	}
+}
+
+func TestR006_DoesNotFire_WhenPendingButSchedulable(t *testing.T) {
+	// A pod is legitimately Pending for a few seconds on every normal start -- Pending alone,
+	// without the scheduler actually reporting it unschedulable, must never fire this.
+	ev := pendingEvidence()
+	ev.Scheduling.Unschedulable = false
+	if f := R006Unschedulable(ev, "run-1", time.Now()); f != nil {
+		t.Error("R006 fired on Pending alone: a pod mid-start is not an unschedulable pod")
+	}
+}
+
+func TestR006_DoesNotFire_WhenUnschedulableButNotPending(t *testing.T) {
+	ev := pendingEvidence()
+	ev.Scheduling.Pending = false
+	if f := R006Unschedulable(ev, "run-1", time.Now()); f != nil {
+		t.Error("R006 fired without Pending: both signals are required together")
+	}
+}
+
+func TestR006_EvidenceIncludesRequestedResources(t *testing.T) {
+	f := R006Unschedulable(pendingEvidence(), "run-1", time.Now())
+	if f == nil {
+		t.Fatal("R006Unschedulable() = nil, want a finding")
+	}
+	found := false
+	for _, e := range f.Evidence {
+		if e.Metric == "cpu_request" && e.Value == 64 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Evidence = %+v, want a cpu_request=64 entry so a reader can judge the likely cause", f.Evidence)
 	}
 }
 

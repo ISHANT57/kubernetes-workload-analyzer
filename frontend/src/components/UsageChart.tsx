@@ -23,28 +23,49 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
     const el = containerRef.current
     if (!el || points.length === 0) return
 
+    // uPlot strokes a canvas, where a CSS custom property is not a valid colour -- resolve any
+    // var(--x) the caller passes against the live computed style so the chart follows the theme
+    // instead of silently drawing nothing.
+    const resolve = (c: string): string => {
+      const match = /^var\((--[^)]+)\)$/.exec(c.trim())
+      if (!match) return c
+      const value = getComputedStyle(el).getPropertyValue(match[1]).trim()
+      return value || '#6cafff'
+    }
+    const styles = getComputedStyle(el)
+    const mutedStroke = styles.getPropertyValue('--color-text-muted').trim() || '#94a3b8'
+    const criticalStroke = styles.getPropertyValue('--color-critical-fg').trim() || '#f87171'
+
     const xs = points.map((p) => p.t)
     const ys = points.map((p) => p.v)
     const requestLine = xs.map(() => request)
 
     const series: uPlot.Series[] = [
       {},
-      { label: 'usage', stroke: color, width: 2, points: { show: false } },
-      { label: 'request', stroke: '#94a3b8', width: 1.5, dash: [5, 4], points: { show: false } },
+      { label: 'usage', stroke: resolve(color), width: 2, points: { show: false } },
+      { label: 'request', stroke: mutedStroke, width: 1.5, dash: [5, 4], points: { show: false } },
     ]
     const data: uPlot.AlignedData = [xs, ys, requestLine]
 
     if (limit > 0) {
-      series.push({ label: 'limit', stroke: '#f87171', width: 1.5, dash: [2, 3], points: { show: false } })
+      series.push({ label: 'limit', stroke: criticalStroke, width: 1.5, dash: [2, 3], points: { show: false } })
       data.push(xs.map(() => limit))
     }
+
+    // Axis labels and gridlines are canvas-drawn too: uPlot's defaults are tuned for a light
+    // background and all but disappear on the dark theme, so both come from our tokens.
+    const gridStroke = styles.getPropertyValue('--color-border').trim() || '#e3e7ee'
+    const axis = { stroke: mutedStroke, grid: { stroke: gridStroke, width: 1 }, ticks: { stroke: gridStroke } }
 
     const opts: uPlot.Options = {
       width: el.clientWidth,
       height: 220,
       series,
       scales: { x: { time: true } },
-      axes: [{ space: 60 }, { values: (_u: uPlot, vals: number[]) => vals.map(formatValue), size: 70 }],
+      axes: [
+        { ...axis, space: 60 },
+        { ...axis, values: (_u: uPlot, vals: number[]) => vals.map(formatValue), size: 70 },
+      ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: true },
     }

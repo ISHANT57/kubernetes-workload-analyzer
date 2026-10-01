@@ -1,6 +1,7 @@
 import { getLatestRun } from '../api/client'
 import { Card } from '../components/Card'
 import { KpiRow, KpiTile } from '../components/Kpi'
+import { IconClock, IconCube, IconFindings, IconPulse } from '../components/Icons'
 import { ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
 import { formatDurationMs, formatRelativeTime } from '../format'
@@ -18,14 +19,23 @@ export function PlatformStatus() {
 
   return (
     <div>
-      <h1 className="page-title">Platform Status</h1>
+      <div className="page-head">
+        <h1 className="page-title">Platform Status</h1>
+        <p className="page-subtitle">The analyzer's own health — run cadence, duration and source failures.</p>
+      </div>
       {run.stale && <StaleBanner />}
 
       <KpiRow>
-        <KpiTile value={r.status} label="Run status" tone={r.status === 'complete' ? 'good' : r.status === 'partial' ? 'warning' : 'critical'} />
-        <KpiTile value={formatDurationMs(r.duration_ms)} label="Duration" tone="neutral" />
-        <KpiTile value={r.workloads_seen} label="Workloads seen" tone="neutral" />
-        <KpiTile value={r.findings_count} label="Findings produced" tone="neutral" />
+        <KpiTile
+          value={r.status}
+          label="Run status"
+          hint={r.query_errors.length === 0 ? 'All sources answered' : `${r.query_errors.length} query error${r.query_errors.length === 1 ? '' : 's'}`}
+          tone={r.status === 'complete' ? 'good' : r.status === 'partial' ? 'warning' : 'critical'}
+          icon={<IconPulse />}
+        />
+        <KpiTile value={formatDurationMs(r.duration_ms)} label="Duration" hint="Last analysis pass" tone="neutral" icon={<IconClock />} />
+        <KpiTile value={r.workloads_seen} label="Workloads seen" hint="Deployments, StatefulSets, DaemonSets" tone="neutral" icon={<IconCube />} />
+        <KpiTile value={r.findings_count} label="Findings produced" hint="In this run" tone="neutral" icon={<IconFindings />} />
       </KpiRow>
 
       <Card title="Run details" className="card--quiet">
@@ -47,9 +57,11 @@ export function PlatformStatus() {
         </div>
       </Card>
 
-      <Card title="Data source errors this run">
+      <Card title="Data source errors this run" subtitle="Prometheus, Kubernetes and per-workload evidence failures" className={r.query_errors.length > 0 ? 'card--flush' : ''}>
         {r.query_errors.length === 0 ? (
-          <p style={{ color: 'var(--color-good-fg)' }}>Prometheus and Kubernetes both answered cleanly.</p>
+          <p className="note" style={{ color: 'var(--color-good-fg)', margin: 0 }}>
+            Prometheus and Kubernetes both answered cleanly.
+          </p>
         ) : (
           <table className="data-table">
             <thead>
@@ -73,7 +85,7 @@ export function PlatformStatus() {
       </Card>
 
       <Card title="Raw endpoints">
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+        <p className="note" style={{ margin: 0 }}>
           <a href="/healthz" target="_blank" rel="noreferrer">
             /healthz
           </a>{' '}
@@ -85,7 +97,7 @@ export function PlatformStatus() {
           <a href="/metrics" target="_blank" rel="noreferrer">
             /metrics
           </a>{' '}
-          (Prometheus self-observability, per the project brief's own "observability of our own platform" requirement)
+          · Prometheus self-observability, per the project brief's own "observability of our own platform" requirement.
         </p>
       </Card>
     </div>

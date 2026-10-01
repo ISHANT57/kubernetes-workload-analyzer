@@ -1,30 +1,22 @@
-.cluster-badge {
-  display: block;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  padding: 0.4rem 0.6rem;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  white-space: nowrap;
-  text-align: center;
-}
-
+.cluster-badge,
 .cluster-switcher {
-  display: block;
-  width: 100%;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 0.4rem 0.5rem;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem var(--space-3);
+  max-width: 260px;
 }
 
-@media (max-width: 860px) {
-  .cluster-badge,
-  .cluster-switcher {
-    width: auto;
-  }
+.cluster-badge {
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cluster-switcher:hover {
+  border-color: var(--color-accent);
 }

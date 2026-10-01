@@ -1,14 +1,13 @@
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 22px);
-  gap: 4px;
-  margin-bottom: 1.5rem;
+  grid-template-columns: repeat(auto-fill, 20px);
+  gap: 5px;
 }
 
 .status-chip {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   text-decoration: none;
 }
@@ -27,5 +26,26 @@
 
 .status-chip:hover {
   outline: 2px solid var(--color-text);
-  outline-offset: 1px;
+  outline-offset: 2px;
+}
+
+.strip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.strip-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.strip-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
 }

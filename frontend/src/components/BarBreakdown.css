@@ -1,35 +1,35 @@
 .bar-breakdown {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: var(--space-3);
 }
 
 .bar-row {
   display: grid;
-  grid-template-columns: 110px 1fr 2rem;
+  grid-template-columns: 120px 1fr 2.2rem;
   align-items: center;
-  gap: 0.6rem;
-  font-size: 0.82rem;
+  gap: var(--space-3);
+  font-size: 0.81rem;
 }
 
 .bar-label {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bar-track {
-  background: var(--color-bg);
-  border-radius: 4px;
-  height: 10px;
+  background: var(--color-surface-sunken);
+  border-radius: 999px;
+  height: 8px;
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 4px;
-  min-width: 2px;
+  border-radius: 999px;
+  min-width: 3px;
 }
 
 .bar-fill-critical {
@@ -45,17 +45,17 @@
   background: var(--color-good-fg);
 }
 .bar-fill-neutral {
-  background: var(--color-muted-fg);
+  background: var(--color-accent);
 }
 
 .bar-count {
   text-align: right;
-  font-weight: 600;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 480px) {
   .bar-row {
-    grid-template-columns: 90px 1fr 1.6rem;
+    grid-template-columns: 90px 1fr 1.8rem;
   }
 }

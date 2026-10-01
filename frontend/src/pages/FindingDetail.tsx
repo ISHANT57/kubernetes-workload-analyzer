@@ -6,7 +6,7 @@ import { CategoryTag, CaveatBadge, ConfidenceBadge, DataQualityBadge, SeverityBa
 import { ErrorState, LoadingState } from '../components/Status'
 import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
-import { formatBytes, formatCores, formatPercent, formatRelativeTime, formatUSD } from '../format'
+import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
 import type { Finding, TimeSeriesResponse } from '../api/types'
 
@@ -40,13 +40,18 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
       <Link className="back-link" to="/findings">
         ← Back to findings
       </Link>
-      <h1 className="page-title">
-        {f.workload.namespace}/{f.workload.name}
-        {f.container ? `/${f.container}` : ''}
-      </h1>
+      <div className="page-head">
+        <h1 className="page-title">
+          {f.workload.namespace}/{f.workload.name}
+          {f.container ? `/${f.container}` : ''}
+        </h1>
+        <p className="page-subtitle">
+          {f.rule_id} · {f.workload.kind}
+        </p>
+      </div>
 
       <Card>
-        <div className="stat-row" style={{ marginBottom: '0.75rem' }}>
+        <div className="badge-row" style={{ marginBottom: 'var(--space-4)' }}>
           <SeverityBadge severity={f.severity} />
           <CategoryTag category={f.category} />
           <ConfidenceBadge confidence={f.confidence} reason={f.confidence_reason} />
@@ -55,7 +60,7 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
             <CaveatBadge key={c} caveat={c} />
           ))}
         </div>
-        <p>{f.problem}</p>
+        <p style={{ margin: '0 0 var(--space-4)', fontSize: '0.95rem' }}>{f.problem}</p>
         <div className="kv-grid">
           <div className="kv-item">
             <div className="kv-label">Rule</div>
@@ -81,13 +86,13 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
           </div>
         </div>
         {f.confidence_reason && (
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.82rem', marginTop: '0.5rem' }}>
+          <p className="note">
             <strong>Why this confidence:</strong> {f.confidence_reason}
           </p>
         )}
       </Card>
 
-      <Card title="Evidence">
+      <Card title="Evidence" subtitle="Every value below is the output of the query shown beside it" className="card--flush">
         <table className="data-table evidence-table">
           <thead>
             <tr>
@@ -100,7 +105,7 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
             {f.evidence.map((e, i) => (
               <tr key={i}>
                 <td>{e.metric}</td>
-                <td>{formatEvidenceValue(e.value, e.unit)}</td>
+                <td className="num">{formatEvidenceValue(e.value, e.unit)}</td>
                 <td>
                   <code>{e.query}</code>
                 </td>
@@ -111,7 +116,7 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
       </Card>
 
       {f.cost && (
-        <Card title="Estimated cost impact">
+        <Card title="Estimated cost impact" subtitle="Estimated under the assumptions listed below — never a quoted saving">
           <div className="cost-box">
             <div className="kv-grid">
               <div className="kv-item">
@@ -148,8 +153,14 @@ function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' |
   )
   const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
 
+  const grafanaLink = (
+    <a href={grafanaWorkloadUrl(finding.workload.namespace, finding.workload.name, finding.workload.kind)} target="_blank" rel="noreferrer">
+      Investigate in Grafana ↗
+    </a>
+  )
+
   return (
-    <Card title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request (last 24h)`}>
+    <Card title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`} subtitle="Last 24 hours" actions={grafanaLink}>
       {series.status === 'loading' && <LoadingState label="Loading chart…" />}
       {series.status === 'error' && <ErrorState message={series.error} />}
       {series.status === 'ok' && (
@@ -158,25 +169,9 @@ function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' |
           request={series.data.request}
           limit={series.data.limit}
           formatValue={metric === 'cpu' ? formatCores : formatBytes}
-          color={metric === 'cpu' ? '#3b82f6' : '#a855f7'}
+          color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
         />
       )}
-      <p style={{ marginTop: '0.6rem', fontSize: '0.82rem' }}>
-        <a href={grafanaWorkloadUrl(finding.workload.namespace, finding.workload.name, finding.workload.kind)} target="_blank" rel="noreferrer">
-          Investigate further in Grafana ↗
-        </a>
-      </p>
     </Card>
   )
-}
-
-function formatEvidenceValue(value: number, unit: string): string {
-  if (unit === 'cores') return formatCores(value)
-  if (unit === 'bytes') return formatBytes(value)
-  if (unit === 'percent') return `${value.toFixed(0)}%`
-  if (unit === 'count') return value.toFixed(0)
-  // For flag-style evidence (e.g. reason=OOMKilled encoded as value=1, unit="OOMKilled"),
-  // the unit string itself is the meaningful label -- show it plainly instead of "1 OOMKilled".
-  if (value === 1 && unit && Number.isNaN(Number(unit))) return unit
-  return `${value} ${unit}`.trim()
 }

@@ -39,3 +39,17 @@ export function formatDurationMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
+
+/** Renders one EvidenceItem's value using the unit the backend attached to it. Shared by the
+ * finding detail page and Overview's attention rail so the same number never formats two ways. */
+export function formatEvidenceValue(value: number, unit: string): string {
+  if (unit === 'cores') return formatCores(value)
+  if (unit === 'bytes') return formatBytes(value)
+  if (unit === 'percent') return `${value.toFixed(0)}%`
+  if (unit === 'count') return value.toFixed(0)
+  if (unit === 'bool') return value === 1 ? 'yes' : 'no'
+  // For flag-style evidence (e.g. reason=OOMKilled encoded as value=1, unit="OOMKilled"),
+  // the unit string itself is the meaningful label -- show it plainly instead of "1 OOMKilled".
+  if (value === 1 && unit && Number.isNaN(Number(unit))) return unit
+  return `${value} ${unit}`.trim()
+}

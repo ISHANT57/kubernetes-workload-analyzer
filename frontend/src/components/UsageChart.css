@@ -7,11 +7,18 @@
   color: var(--color-text-muted);
 }
 
+/* uPlot ships light-theme axis/grid colours; retint them from our own tokens so the chart reads
+   correctly in dark mode instead of drawing near-black gridlines on a near-black panel. */
+.usage-chart .u-axis,
+.usage-chart .u-select {
+  color: var(--color-text-muted);
+}
+
 .chart-empty {
-  padding: 2rem;
+  padding: var(--space-6);
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.85rem;
-  border: 1px dashed var(--color-border);
-  border-radius: 8px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
 }

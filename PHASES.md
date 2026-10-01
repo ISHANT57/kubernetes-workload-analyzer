@@ -258,6 +258,31 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   R005), only the layout got denser; declined copying the reference's raw CPU/Memory-gradient
   heatmap, which carries no evidence or explanation. Verified live via Playwright across light,
   dark and 390px mobile: zero console errors.
+- 2026-10-01: R006 -- unschedulable/Pending, the oldest backlog item (deferred since Phase 4,
+  `demo/pending` fixture existed specifically for it). Prompted by a request to replicate a
+  Datadog-style raw-metrics dashboard "exactly" -- declined as a straight copy (would reverse
+  D-006), but the owner's real ask reframed it correctly: turn what those dashboards show as a
+  raw "0 Pending" counter into an actual evidence-based finding, which is this project's whole
+  purpose applied to a gap it already had. `evidence.SchedulingEvidence` (new, Prometheus-only
+  like every other evidence field -- D-007 grants no Kubernetes Events access, so the builder
+  still never touches the Kubernetes API): `Pending` and `Unschedulable`, from
+  `kube_pod_status_phase{phase="Pending"}` and `kube_pod_status_unschedulable` (both named
+  VERIFIED-available in the measurement model since Phase 1, just never wired into a rule).
+  `rules.R006Unschedulable` fires only when **both** are true together -- Pending alone is the
+  normal few-second state every pod passes through on start, firing on that alone would be a
+  false positive on every healthy deployment. The workload's own requested CPU/memory is attached
+  as evidence so a reader can judge the likely cause (e.g. a request exceeding any node's real
+  capacity) without the rule asserting a specific FailedScheduling reason it was never given.
+  5 new tests (2 in `internal/evidence` for the Prometheus queries themselves, 3 in
+  `internal/rules` for the fire/no-fire boundary, including the critical "Pending but
+  schedulable" case that must never fire). Live-verified via `cmd/verify` against the real
+  `demo/pending` fixture before and after: `pending=true unschedulable=true` (matching the
+  fixture's real cause, `cpu_request=64` cores against a 12-core node), and all 8 other demo
+  fixtures confirmed `pending=false unschedulable=false` -- zero false positives.
+  `demo/expected-findings.yaml`'s `pending` scenario updated from `rules_fired: []` to `[R006]`,
+  closing the last gap in the project's own integration-test ground truth. No change to R001-R004,
+  cost semantics, `/readyz`, or D-007's RBAC scope (still zero Kubernetes API calls from the
+  evidence layer).
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

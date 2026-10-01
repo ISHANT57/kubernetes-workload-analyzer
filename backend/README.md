@@ -1,6 +1,6 @@
 # backend
 
-Go analyzer: Kubernetes discovery, Prometheus queries, the rule engine (R001–R004; R005 is the
+Go analyzer: Kubernetes discovery, Prometheus queries, the rule engine (R001-R004 and R006; R005 is the
 data-quality gate embedded in `internal/evidence`), cost estimation, and the JSON API the
 `frontend/` dashboard consumes.
 
@@ -17,7 +17,7 @@ internal/promclient/        Prometheus client behind an interface (instant + ran
 internal/k8sclient/         Kubernetes client behind an interface, scoped to D-007
 internal/evidence/          builds WorkloadEvidence from Prometheus only (no `pods` access);
                              self-calibrated data-quality/confidence tiering
-internal/rules/             R001-R004 as pure functions over WorkloadEvidence
+internal/rules/             R001-R004, R006 as pure functions over WorkloadEvidence
 internal/cost/              estimated cost impact -- explicit "Estimated", never "savings"
 internal/findings/          orchestrates evidence+rules+cost into a ranked, stably-ID'd list
 internal/runner/            the analysis loop: timer, failure handling, in-memory snapshot

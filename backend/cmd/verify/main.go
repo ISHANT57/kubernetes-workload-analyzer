@@ -45,5 +45,6 @@ func main() {
 			ev.RestartsIncrease1h, ev.RestartsIncrease24h, ev.HasRestartsData, ev.LastTerminatedReason, ev.WaitingReason)
 		fmt.Printf("hpa: present=%v cpu=%v(%.0f%%) mem=%v(%.0f%%)\n",
 			ev.HPA.Present, ev.HPA.TargetsCPUUtilization, ev.HPA.CPUTargetUtilizationPercent, ev.HPA.TargetsMemoryUtilization, ev.HPA.MemoryTargetUtilizationPercent)
+		fmt.Printf("scheduling: pending=%v unschedulable=%v\n", ev.Scheduling.Pending, ev.Scheduling.Unschedulable)
 	}
 }

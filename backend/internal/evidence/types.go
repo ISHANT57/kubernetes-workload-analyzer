@@ -41,7 +41,8 @@ type WorkloadEvidence struct {
 	LastTerminatedReason string // "" if none observed, e.g. "OOMKilled" | "Error" | "Completed"
 	WaitingReason        string // "" if none observed, e.g. "CrashLoopBackOff"
 
-	HPA HPAEvidence
+	HPA        HPAEvidence
+	Scheduling SchedulingEvidence
 
 	// QueryErrors records which sub-queries failed for this workload, without discarding
 	// whatever evidence *did* come back successfully (AGENTS.md: "unavailable source ...
@@ -89,4 +90,16 @@ type HPAEvidence struct {
 	CPUTargetUtilizationPercent    float64
 	TargetsMemoryUtilization       bool
 	MemoryTargetUtilizationPercent float64
+}
+
+// SchedulingEvidence records whether the scheduler has been unable to place this workload's
+// pod(s) on any node (R006). Prometheus-only, like every other evidence field here (D-007 grants
+// no `pods` access, and the Kubernetes Events API that holds the exact FailedScheduling message
+// text is not queried by this builder at all -- it never touches the Kubernetes API, Prometheus
+// only). Both signals are required together before R006 fires: Pending alone is a normal,
+// momentary state for a pod that is about to start; Pending AND Unschedulable together is what
+// kube-state-metrics reports for a pod the scheduler has given up on for now.
+type SchedulingEvidence struct {
+	Pending       bool
+	Unschedulable bool
 }

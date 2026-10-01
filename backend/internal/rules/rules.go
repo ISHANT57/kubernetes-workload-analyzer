@@ -1,11 +1,14 @@
-// Package rules implements R001-R005 (docs/requirements.md §3) as pure functions over
+// Package rules implements R001-R004 and R006 (docs/requirements.md §3) as pure functions over
 // evidence.WorkloadEvidence. No package here calls Prometheus or Kubernetes directly (AGENTS.md:
 // "Rule and cost logic are pure functions with unit tests"); internal/evidence gathers the
 // input, this package only reasons about it.
 //
 // R005 (the data-quality gate) is not a separate function here: it is embedded in
 // evidence.Classify, which every rule below checks first. A rule that finds DataQuality status
-// other than "ok" returns nil rather than guessing.
+// other than "ok" returns nil rather than guessing. R006 (unschedulable/Pending, added later) is
+// a counter/state-based health rule like R003/R004, so it also skips this gate -- a pod is
+// either reported Pending+Unschedulable right now or it is not, there is no percentile or
+// coverage tier to classify.
 package rules
 
 import (
@@ -181,10 +184,41 @@ func R004OOM(ev evidence.WorkloadEvidence, runID string, now time.Time) *model.F
 	return f
 }
 
+// R006Unschedulable fires when the scheduler cannot place any of a workload's pods on a node:
+// Pending AND Unschedulable together, not Pending alone (a pod is legitimately Pending for a
+// few seconds on every normal start -- that must never fire this). The original backlog item
+// from Phase 4 (demo/pending, docs/requirements.md's MVP rules table): the workload's own
+// requested resources are attached as evidence so a reader can judge the likely cause (e.g. a
+// request that exceeds any node's real capacity), without this rule asserting a specific
+// FailedScheduling reason it was never given (D-007 grants no Kubernetes Events access; this
+// evidence is Prometheus-only, like every other rule here).
+func R006Unschedulable(ev evidence.WorkloadEvidence, runID string, now time.Time) *model.Finding {
+	if !ev.Scheduling.Pending || !ev.Scheduling.Unschedulable {
+		return nil
+	}
+
+	f := newFinding(ev, "R006", runID, now, model.SeverityCritical, model.CategoryHealth,
+		"Pod is Pending and the scheduler reports it as unschedulable -- the workload is not running",
+		"pod phase == Pending and kube_pod_status_unschedulable == 1",
+		model.DataQuality{Status: model.DataQualityOK, AsOf: now}, "", "pod phase and scheduler status both present")
+	f.Evidence = []model.EvidenceItem{
+		{Metric: "pod_pending", Value: 1, Unit: "bool", Query: `kube_pod_status_phase{phase="Pending"}`},
+		{Metric: "pod_unschedulable", Value: 1, Unit: "bool", Query: "kube_pod_status_unschedulable"},
+	}
+	if ev.CPU.HasRequest {
+		f.Evidence = append(f.Evidence, model.EvidenceItem{Metric: "cpu_request", Value: ev.CPU.RequestCores, Unit: "cores", Query: `kube_pod_container_resource_requests{resource="cpu"}`})
+	}
+	if ev.Mem.HasRequest {
+		f.Evidence = append(f.Evidence, model.EvidenceItem{Metric: "memory_request", Value: ev.Mem.RequestBytes, Unit: "bytes", Query: `kube_pod_container_resource_requests{resource="memory"}`})
+	}
+	return f
+}
+
 // All is every MVP rule, in the order findings should be evaluated (health-oriented facts first
 // so a caller can short-circuit resource suggestions when something is actively broken, though
 // nothing here currently does that -- ranking by severity happens in internal/findings).
 var All = []func(evidence.WorkloadEvidence, string, time.Time) *model.Finding{
+	R006Unschedulable,
 	R004OOM,
 	R003FrequentRestarts,
 	R001CPUOverRequested,

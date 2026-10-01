@@ -178,3 +178,57 @@ func TestResolveContainers_StatefulSetAndDaemonSet_ResolveThroughToContainers(t 
 		})
 	}
 }
+
+// --- buildScheduling (R006 evidence) ------------------------------------------------------
+
+func TestBuild_PendingAndUnschedulable_BothTrue(t *testing.T) {
+	prom := &recordingPromClient{
+		instant: func(query string) (promcommon.Vector, error) {
+			switch {
+			case strings.Contains(query, "kube_pod_owner"):
+				return promcommon.Vector{{Metric: promcommon.Metric{"pod": "pending-abc"}}}, nil
+			case strings.Contains(query, `kube_pod_status_phase`) && strings.Contains(query, `phase="Pending"`):
+				return promcommon.Vector{{Value: 1}}, nil
+			case strings.Contains(query, "kube_pod_status_unschedulable"):
+				return promcommon.Vector{{Value: 1}}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+	b := &Builder{Prom: prom}
+	workload := analyzermodel.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "pending"}
+
+	ev := b.Build(context.Background(), workload, "c", time.Now())
+
+	if !ev.Scheduling.Pending {
+		t.Error("Scheduling.Pending = false, want true")
+	}
+	if !ev.Scheduling.Unschedulable {
+		t.Error("Scheduling.Unschedulable = false, want true")
+	}
+}
+
+func TestBuild_SchedulableRunningPod_BothFalse(t *testing.T) {
+	prom := &recordingPromClient{
+		instant: func(query string) (promcommon.Vector, error) {
+			switch {
+			case strings.Contains(query, "kube_pod_owner"):
+				return promcommon.Vector{{Metric: promcommon.Metric{"pod": "running-abc"}}}, nil
+			default:
+				// A Running, schedulable pod: the Pending-phase query returns no series (phase
+				// filter matches nothing) and the unschedulable gauge is simply absent -- both
+				// legitimate "false" outcomes, not errors.
+				return nil, nil
+			}
+		},
+	}
+	b := &Builder{Prom: prom}
+	workload := analyzermodel.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "right-sized"}
+
+	ev := b.Build(context.Background(), workload, "c", time.Now())
+
+	if ev.Scheduling.Pending || ev.Scheduling.Unschedulable {
+		t.Errorf("Scheduling = %+v, want both false for a normal running pod", ev.Scheduling)
+	}
+}

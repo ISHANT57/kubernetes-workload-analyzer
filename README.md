@@ -115,5 +115,6 @@ Phase write-ups (PDF): [docs/reports/](docs/reports/).
 - [docs/performance.md](docs/performance.md) — measured API latency, load test, resource usage under load
 - [docs/kubernetes-fundamentals.md](docs/kubernetes-fundamentals.md) — hands-on lab notes (Phase 1)
 - [docs/runbook.md](docs/runbook.md) — scripted demo, one section per success criterion (Phase 8)
+- [docs/commands.md](docs/commands.md) — every command to build, run, verify and tear down the app
 - [backend/README.md](backend/README.md) — running and testing the Go backend (Phase 3)
 - [docs/reports/](docs/reports/) — per-phase PDF write-ups

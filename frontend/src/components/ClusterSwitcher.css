@@ -5,9 +5,10 @@
   color: var(--color-text);
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  padding: 0.35rem var(--space-3);
+  border-radius: var(--radius-pill);
+  padding: 0.45rem var(--space-4);
   max-width: 260px;
+  transition: border-color 0.15s var(--ease);
 }
 
 .cluster-badge {

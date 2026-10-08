@@ -16,8 +16,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-5) var(--space-5) var(--space-3);
 }
 
 .card-heading {
@@ -26,14 +25,14 @@
 
 .card-title {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.005em;
 }
 
 .card-subtitle {
   margin: 2px 0 0;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--color-text-muted);
 }
 
@@ -86,16 +85,17 @@
 .attention-card {
   display: block;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-border);
-  border-left: 3px solid var(--color-border-strong);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-surface-sunken);
   text-decoration: none;
   color: inherit;
+  transition: border-color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
 .attention-card:hover {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
 }
 
 .attention-head {
@@ -151,9 +151,8 @@
 /* A quieter panel for secondary, self-referential content (the analyzer's own run status) that
    should not compete with the KPI row or the findings above it. */
 .card--quiet {
-  background: transparent;
+  background: var(--color-surface-sunken);
   box-shadow: none;
-  border-style: dashed;
 }
 
 .card--quiet .card-title {
@@ -168,8 +167,8 @@
 }
 
 .page-title {
-  font-size: 1.45rem;
-  font-weight: 700;
+  font-size: 1.6rem;
+  font-weight: 650;
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -235,7 +234,8 @@
   border-bottom: 1px solid var(--color-border);
   text-decoration: none;
   color: inherit;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
+  transition: background 0.15s var(--ease);
 }
 
 .finding-list li:last-child .finding-row {
@@ -272,6 +272,11 @@
   background: var(--color-surface-raised);
 }
 
+.card-footer-link,
+.finding-row {
+  transition: background 0.15s var(--ease);
+}
+
 /* ---------------------------------------------------------------------------------------
    Tables
    --------------------------------------------------------------------------------------- */
@@ -285,12 +290,13 @@ table.data-table td {
 
 table.data-table th {
   color: var(--color-text-muted);
-  font-weight: 600;
-  font-size: 0.71rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--color-surface-sunken);
+  font-weight: 500;
+  font-size: 0.78rem;
   white-space: nowrap;
+}
+
+table.data-table tbody tr {
+  transition: background 0.15s var(--ease);
 }
 
 table.data-table tbody tr:hover {
@@ -343,10 +349,11 @@ table.data-table td.truncate {
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border-strong);
   color: var(--color-text);
-  border-radius: var(--radius-sm);
-  padding: 0.35rem var(--space-2);
-  font-size: 0.8rem;
+  border-radius: var(--radius-pill);
+  padding: 0.45rem var(--space-4);
+  font-size: 0.82rem;
   font-weight: 500;
+  transition: border-color 0.15s var(--ease);
 }
 
 .filters select:hover,
@@ -373,10 +380,8 @@ table.data-table td.truncate {
 }
 
 .kv-item .kv-label {
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .kv-item .kv-value {
@@ -386,10 +391,9 @@ table.data-table td.truncate {
 }
 
 .cost-box {
-  border-left: 3px solid var(--color-accent);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface-sunken);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-4);
+  background: var(--color-accent-bg);
+  border-radius: var(--radius-sm);
 }
 
 .cost-assumptions {
@@ -418,10 +422,9 @@ table.data-table td.truncate {
 }
 
 .section-label {
-  font-size: 0.74rem;
+  font-size: 0.82rem;
+  font-weight: 500;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin: var(--space-4) 0 var(--space-2);
 }
 
@@ -452,4 +455,14 @@ table.data-table td.truncate {
   .split-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+table.data-table a {
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s var(--ease);
+}
+
+table.data-table a:hover {
+  color: var(--color-accent);
 }

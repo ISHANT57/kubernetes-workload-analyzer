@@ -13,6 +13,11 @@
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3000'
 const WORKLOAD_DASHBOARD_PATH = '/d/a164a7f0339f99e89cea5cb47e9be617/kubernetes-compute-resources-workload'
 
+/** Grafana's dashboard list, searched for the bundled resource dashboards. */
+export function grafanaDashboardsUrl(): string {
+  return `${GRAFANA_BASE_URL}/dashboards?query=Compute%20Resources`
+}
+
 export function grafanaWorkloadUrl(namespace: string, workload: string, kind: string): string {
   const params = new URLSearchParams({
     'var-datasource': 'default',

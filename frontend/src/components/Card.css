@@ -715,3 +715,25 @@ table.data-table a:hover {
 table.data-table tbody tr.row-link {
   cursor: pointer;
 }
+
+.span-6 {
+  grid-column: span 6;
+}
+@media (max-width: 1100px) {
+  .span-6 {
+    grid-column: 1 / -1;
+  }
+}
+
+.highlight-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.highlight-list li::marker {
+  color: var(--color-accent);
+}

@@ -184,3 +184,22 @@ experience for a local demo.
 localhost, so nothing is exposed to the network. This block must be removed for any shared or
 production cluster. Supersedes the "no anonymous access" stance in the earlier Grafana threat-model row.
 **Status: ACCEPTED 2026-10-08** (owner asked for no login)
+
+---
+
+## D-011 Cluster summary: native Prometheus queries, not an embedded Grafana
+
+**Problem:** show Grafana-style cluster analytics inside the app.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Native page from fixed Prometheus queries (chosen)** | Same data Grafana shows; matches the app's theme and both modes; works without Grafana running; every number traceable to one query; gaps reported; no iframe | Only the metrics we chose to show, not every Grafana panel |
+| Embed Grafana panels in an iframe | Reuses any existing panel | Needs `allow_embedding` (clickjacking exposure) and anonymous access; clashes with the app's theme; breaks if Grafana is down; cannot show the "what stands out" readings |
+
+**Decision:** `GET /api/cluster/summary` runs 13 fixed instant queries (nodes, pods by phase,
+CPU and memory allocatable/requested/used, restarts) through the existing Prometheus client,
+caches for 15s, and returns each metric as nullable with the failures listed. Requested totals
+exclude unschedulable pods, which hold no node capacity. `Highlights` is a pure, tested function
+with stated thresholds (requests >= 80% of allocatable, usage < 50% of requests). A Grafana link
+remains for deep dives. No new dependency, no new datastore, no new Kubernetes permission.
+**Status: ACCEPTED 2026-10-08**

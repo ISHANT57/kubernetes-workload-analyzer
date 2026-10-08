@@ -36,11 +36,17 @@ type TimeSeriesProvider interface {
 	MemoryUsageSeries(ctx context.Context, workload model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error)
 }
 
+// ClusterSummaryProvider is implemented by *clustersummary.Provider.
+type ClusterSummaryProvider interface {
+	Summary(ctx context.Context, now time.Time) model.ClusterSummary
+}
+
 // Server serves the analyzer's HTTP endpoints.
 type Server struct {
 	mux       *http.ServeMux
 	latest    LatestProvider
-	builder   TimeSeriesProvider // nil is valid: /api/timeseries then returns 501
+	builder   TimeSeriesProvider     // nil is valid: /api/timeseries then returns 501
+	cluster   ClusterSummaryProvider // nil is valid: /api/cluster/summary then returns 501
 	clusterID string
 	peers     []model.ClusterPeer
 	logger    *slog.Logger
@@ -61,6 +67,7 @@ func New(latest LatestProvider, builder TimeSeriesProvider, staticDir, clusterID
 	s.mux.HandleFunc("GET /api/findings", s.handleFindings)
 	s.mux.HandleFunc("GET /api/timeseries", s.handleTimeseries)
 	s.mux.HandleFunc("GET /api/clusters", s.handleClusters)
+	s.mux.HandleFunc("GET /api/cluster/summary", s.handleClusterSummary)
 	if staticDir != "" {
 		s.mux.HandleFunc("GET /", spaHandler(staticDir))
 	}
@@ -80,6 +87,24 @@ func spaHandler(dir string) http.HandlerFunc {
 		}
 		fileServer.ServeHTTP(w, r)
 	}
+}
+
+// WithClusterSummary enables GET /api/cluster/summary and returns the server for chaining.
+func (s *Server) WithClusterSummary(p ClusterSummaryProvider) *Server {
+	s.cluster = p
+	return s
+}
+
+// handleClusterSummary serves the cluster-wide capacity and health snapshot. Prometheus problems
+// degrade individual fields (listed in "errors") instead of failing the request.
+func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
+	if s.cluster == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "cluster summary not configured"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, s.cluster.Summary(ctx, time.Now()))
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

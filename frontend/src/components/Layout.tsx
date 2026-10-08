@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Breadcrumb } from './Breadcrumb'
 import { ClusterSwitcher } from './ClusterSwitcher'
-import { IconAnalytics, IconFindings, IconOverview, IconPlatform, IconWorkloads } from './Icons'
+import { IconAnalytics, IconCube, IconFindings, IconOverview, IconPlatform, IconWorkloads } from './Icons'
 import { ThemeToggle } from './ThemeToggle'
 import './Layout.css'
 
@@ -18,6 +18,7 @@ const NAV_GROUPS: { heading: string; items: NavItem[] }[] = [
     heading: 'Overview',
     items: [
       { to: '/', label: 'Dashboard', end: true, icon: <IconOverview /> },
+      { to: '/cluster', label: 'Cluster', icon: <IconCube /> },
       { to: '/findings', label: 'Findings', icon: <IconFindings /> },
       { to: '/workloads', label: 'Workloads', icon: <IconWorkloads /> },
     ],

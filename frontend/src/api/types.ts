@@ -36,6 +36,26 @@ export interface CostImpact {
   assumptions: string[]
 }
 
+export interface ClusterSummary {
+  cluster_id: string
+  generated_at: string
+  nodes: number | null
+  nodes_ready: number | null
+  namespaces: number | null
+  pods_running: number | null
+  pods_pending: number | null
+  pods_failed: number | null
+  cpu_allocatable_cores: number | null
+  cpu_requested_cores: number | null
+  cpu_usage_cores: number | null
+  mem_allocatable_bytes: number | null
+  mem_requested_bytes: number | null
+  mem_usage_bytes: number | null
+  restarts_24h: number | null
+  highlights: string[]
+  errors: string[]
+}
+
 export interface Summary {
   what_happened: string
   why_it_matters: string

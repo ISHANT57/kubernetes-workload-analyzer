@@ -1,6 +1,6 @@
 // Thin, typed wrapper around the backend's JSON API. Every call goes through this file -- no
 // component calls fetch() directly -- so the base path and error handling are defined once.
-import type { AnalysisRun, ClustersInfo, Finding, TimeSeriesResponse } from './types'
+import type { AnalysisRun, ClusterSummary, ClustersInfo, Finding, TimeSeriesResponse } from './types'
 
 // Empty string: same-origin, matching how the backend serves the built frontend in production
 // (internal/httpserver would need a static-file handler added for that -- see backend/README.md
@@ -39,6 +39,10 @@ export function getLatestRun(): Promise<AnalysisRun> {
 // backend.
 export function getClusters(): Promise<ClustersInfo> {
   return getJSON<ClustersInfo>('/api/clusters')
+}
+
+export function getClusterSummary(): Promise<ClusterSummary> {
+  return getJSON<ClusterSummary>('/api/cluster/summary')
 }
 
 export function getTimeseries(

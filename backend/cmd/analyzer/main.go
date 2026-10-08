@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/clustersummary"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/config"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/cost"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/evidence"
@@ -89,7 +90,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           httpserver.New(analysisRunner, evidenceBuilder, cfg.StaticDir, cfg.ClusterID, cfg.PeerClusters, logger),
+		Handler:           httpserver.New(analysisRunner, evidenceBuilder, cfg.StaticDir, cfg.ClusterID, cfg.PeerClusters, logger).WithClusterSummary(clustersummary.NewProvider(promClient, model.ClusterID(cfg.ClusterID))),
 		ReadHeaderTimeout: 5 * time.Second, // never accept a client that trickles headers forever
 	}
 

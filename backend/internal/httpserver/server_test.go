@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,5 +260,29 @@ func TestMetrics_Served(t *testing.T) {
 	}
 	if rec.Body.Len() == 0 {
 		t.Error("GET /metrics: body is empty, want the Prometheus text-exposition format")
+	}
+}
+
+type fakeClusterSummary struct{}
+
+func (fakeClusterSummary) Summary(_ context.Context, now time.Time) model.ClusterSummary {
+	return model.ClusterSummary{ClusterID: "c1", GeneratedAt: now, Highlights: []string{}, Errors: []string{}}
+}
+
+func TestClusterSummary_NotConfigured_501(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", "test-cluster", nil, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/cluster/summary", nil))
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501", rec.Code)
+	}
+}
+
+func TestClusterSummary_Configured_200JSON(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", "test-cluster", nil, testLogger()).WithClusterSummary(fakeClusterSummary{})
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/cluster/summary", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"cluster_id":"c1"`) {
+		t.Errorf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

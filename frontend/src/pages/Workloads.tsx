@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { ClickableRow } from '../components/ClickableRow'
 import { getFindings } from '../api/client'
 import { Card } from '../components/Card'
 import { EmptyState, ErrorState, LoadingState, StaleBanner } from '../components/Status'
@@ -16,6 +17,7 @@ function evidenceValue(f: Finding, metric: string): number | undefined {
  * "right-sized, nothing to say" row for every workload would just repeat what Findings already
  * shows as "no finding", not add information. */
 export function Workloads() {
+  const back = { to: '/workloads', label: 'Back to workloads' }
   const findings = usePolling<Finding[]>(getFindings, 15000)
 
   if (findings.status === 'loading') return <LoadingState label="Loading workloads…" />
@@ -63,9 +65,9 @@ export function Workloads() {
                 const observed = evidenceValue(f, isCPU ? 'cpu_usage_p95' : 'memory_usage_max')
                 const suggested = evidenceValue(f, isCPU ? 'cpu_suggested_request' : 'memory_suggested_request')
                 return (
-                  <tr key={f.id}>
+                  <ClickableRow key={f.id} to={`/findings/${f.id}`} back={back}>
                     <td className="truncate" title={`${f.workload.namespace}/${f.workload.name}`}>
-                      <Link to={`/findings/${f.id}`}>
+                      <Link to={`/findings/${f.id}`} state={{ back }}>
                         {f.workload.namespace}/{f.workload.name}
                       </Link>
                     </td>
@@ -79,7 +81,7 @@ export function Workloads() {
                         Grafana ↗
                       </a>
                     </td>
-                  </tr>
+                  </ClickableRow>
                 )
               })}
             </tbody>

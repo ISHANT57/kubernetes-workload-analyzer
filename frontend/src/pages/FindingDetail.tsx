@@ -1,9 +1,10 @@
 import { useCallback } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import type { BackState } from '../components/ClickableRow'
 import { getFindings, getTimeseries } from '../api/client'
 import { Card } from '../components/Card'
 import { CategoryTag, CaveatBadge, ConfidenceBadge, DataQualityBadge, SeverityBadge } from '../components/Badges'
-import { ErrorState, LoadingState } from '../components/Status'
+import { EmptyState, ErrorState, LoadingState } from '../components/Status'
 import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
@@ -23,10 +24,8 @@ export function FindingDetail() {
   if (!finding) {
     return (
       <div>
-        <Link className="back-link" to="/findings">
-          ← Back to findings
-        </Link>
-        <ErrorState message={`Finding ${id} was not found in the current findings list (it may have resolved, or a new analysis run replaced it).`} />
+        <BackLink />
+        <EmptyState message="This finding is no longer in the current results. It may have been resolved, or a newer analysis run replaced it." />
       </div>
     )
   }
@@ -34,12 +33,21 @@ export function FindingDetail() {
   return <FindingDetailBody finding={finding} />
 }
 
+/** Returns to the page the person came from (with its filters), else the findings list. */
+function BackLink() {
+  const state = useLocation().state as Partial<BackState> | null
+  const back = state?.back ?? { to: '/findings', label: 'Back to findings' }
+  return (
+    <Link className="back-link" to={back.to}>
+      ← {back.label}
+    </Link>
+  )
+}
+
 function FindingDetailBody({ finding: f }: { finding: Finding }) {
   return (
     <div>
-      <Link className="back-link" to="/findings">
-        ← Back to findings
-      </Link>
+      <BackLink />
       <div className="page-head">
         <h1 className="page-title">
           {f.workload.namespace}/{f.workload.name}

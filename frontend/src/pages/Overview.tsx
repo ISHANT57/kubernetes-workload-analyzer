@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { getFindings, getLatestRun } from '../api/client'
 import { Card } from '../components/Card'
+import { ClickableRow } from '../components/ClickableRow'
 import { CategoryTag, ConfidenceBadge, SeverityBadge } from '../components/Badges'
 import { KpiRow, KpiTile } from '../components/Kpi'
 import { HealthGauge } from '../components/HealthGauge'
@@ -23,6 +24,7 @@ export function Overview() {
   if (run.status === 'error') return <ErrorState message={run.error} />
   if (findings.status === 'error') return <ErrorState message={findings.error} />
 
+  const back = { to: '/', label: 'Back to dashboard' }
   const r = run.data
   const fs = findings.data
   const critical = fs.filter((f) => f.severity === 'critical').length
@@ -93,7 +95,7 @@ export function Overview() {
           ) : (
             <div className="attention-list">
               {attention.map((f) => (
-                <Link key={f.id} to={`/findings/${f.id}`} className={`attention-card attention-${f.severity}`}>
+                <Link key={f.id} to={`/findings/${f.id}`} state={{ back }} className={`attention-card attention-${f.severity}`}>
                   <div className="attention-head">
                     <span className="attention-name">
                       {f.workload.namespace}/{f.workload.name}
@@ -167,12 +169,12 @@ export function Overview() {
               </thead>
               <tbody>
                 {top.map((f) => (
-                  <tr key={f.id}>
+                  <ClickableRow key={f.id} to={`/findings/${f.id}`} back={back}>
                     <td>
                       <SeverityBadge severity={f.severity} />
                     </td>
                     <td>
-                      <Link to={`/findings/${f.id}`}>
+                      <Link to={`/findings/${f.id}`} state={{ back }}>
                         {f.workload.namespace}/{f.workload.name}
                       </Link>
                     </td>
@@ -185,7 +187,7 @@ export function Overview() {
                     <td>
                       <ConfidenceBadge confidence={f.confidence} reason={f.confidence_reason} />
                     </td>
-                  </tr>
+                  </ClickableRow>
                 ))}
               </tbody>
             </table>

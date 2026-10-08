@@ -710,3 +710,8 @@ table.data-table a:hover {
   font-weight: var(--kpi-weight);
   font-variant-numeric: tabular-nums;
 }
+
+/* Whole-row click target (ClickableRow). The link inside remains the keyboard path. */
+table.data-table tbody tr.row-link {
+  cursor: pointer;
+}

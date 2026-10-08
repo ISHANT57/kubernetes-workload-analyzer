@@ -6,6 +6,7 @@ import { FindingDetail } from './pages/FindingDetail'
 import { Workloads } from './pages/Workloads'
 import { Analytics } from './pages/Analytics'
 import { PlatformStatus } from './pages/PlatformStatus'
+import { NotFound } from './pages/NotFound'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="workloads" element={<Workloads />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="status" element={<PlatformStatus />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   )

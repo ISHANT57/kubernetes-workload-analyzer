@@ -44,7 +44,7 @@ document where they agree and differ.
 | Cluster | kind, single node |
 | Metrics | kube-prometheus-stack (Prometheus, kube-state-metrics, node-exporter, Grafana) |
 | Backend | Go: client-go (read-only), Prometheus client, rule engine, REST API |
-| Frontend | React + Vite + TypeScript + uPlot |
+| Frontend | React + Vite + TypeScript + uPlot; light and dark themes; vitest for unit tests |
 | Security | Read-only ClusterRole; no access to pods, secrets or configmaps |
 
 Why each choice was made: [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -102,6 +102,13 @@ Phase write-ups (PDF): [docs/reports/](docs/reports/).
 - Reducing a pod's request does **not** by itself reduce a cloud bill. Savings happen only if the
   freed capacity lets nodes be removed or avoided. See [docs/requirements.md](docs/requirements.md#4-cost-model).
 - Single cluster in v1; the data model carries a `ClusterID` so multi-cluster stays possible.
+- No stored history (D-004 is not accepted): findings are held in memory and are lost when the pod
+  restarts, and the Analytics and Cluster pages are snapshots, not trends.
+- Grafana allows anonymous read-only access in the local demo so finding links open without a
+  login (D-010). Remove that block from `deploy/prometheus/values.yaml` for any shared cluster.
+  The dashboard and API themselves have no login.
+- Verified only on a local single-node kind cluster, not a real cluster. Cost prices are examples.
+- Finding summaries are fixed templates, not AI (D-009); next steps in them are things to check.
 - A laptop cluster that sleeps has gaps in history; findings report data coverage.
 
 ## Documents

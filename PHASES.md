@@ -305,6 +305,26 @@ Status values: `NOT STARTED` · `IN PROGRESS` · `WAITING FOR DECISION` · `DONE
   full-width KPI cards pushed the actual findings a screen and a half down on a phone (now
   two-up). Verified live against real cluster findings across all five pages, desktop dark,
   desktop light and 390px mobile: zero console errors throughout.
+- 2026-10-08: Post-Phase-8 hardening and UI work (owner-requested, all under the standing
+  delegation). Branch `design/soft-ui`. **UI:** floating-shell redesign with a light/dark toggle
+  (`theme.ts`), WCAG AA text contrast measured with a script across every page in both themes,
+  whole-row clickable tables, filters kept in the URL, a contextual back link, a not-found page,
+  and full-width content. **Finding summaries (D-009):** `internal/summary` turns each finding into
+  what happened / why it matters / what to check, from fixed per-rule templates, unit-tested; it
+  states what a rule cannot know (restart cause, unschedulable reason) instead of guessing.
+  **Cluster page (D-011):** `GET /api/cluster/summary` runs 13 fixed Prometheus queries (15s cache),
+  returns nullable metrics plus a missing-data list, and excludes unschedulable pods from requested
+  totals (a 64-core Pending demo pod had inflated CPU requests to 567% of allocatable).
+  **Grafana (D-010, D-012):** anonymous Viewer for the local demo only (anonymous write verified
+  403), and bundled dashboards set to the browser time zone. **Time model (D-012):** investigated
+  the chart-vs-Grafana mismatch with measurements: timestamps were already identical in
+  Prometheus, the Go API and Grafana; the differences were Grafana's hard-set UTC, a hardcoded
+  "Last 24 hours" label over ~90 minutes of data, and sub-second truncation of range ends. Series
+  ranges now align to the step grid (20/20 points reproduce exactly in Prometheus by timestamp),
+  `/api/timeseries` reports the range it queried, and the chart states its zone and data coverage.
+  `go vet` caught one real bug along the way (swapped Sprintf arguments in a highlight sentence).
+  Known open items: no history store (D-004), KRR comparison, "Data coverage 0%" shown on
+  counter-based findings, second cluster not recreated, no saved end-to-end browser tests.
 
 ## MVP done-condition
 See `docs/requirements.md` → MVP.

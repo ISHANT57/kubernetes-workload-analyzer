@@ -36,6 +36,13 @@ export interface CostImpact {
   assumptions: string[]
 }
 
+export interface Summary {
+  what_happened: string
+  why_it_matters: string
+  next_steps: string[]
+  notes: string[]
+}
+
 export interface Finding {
   id: string
   cluster_id: string
@@ -55,6 +62,7 @@ export interface Finding {
   confidence_reason: string
   caveats: string[] | null
   cost: CostImpact | null
+  summary: Summary | null
 }
 
 export interface QueryError {

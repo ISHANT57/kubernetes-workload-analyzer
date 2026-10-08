@@ -8,7 +8,7 @@ import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
-import type { Finding, TimeSeriesResponse } from '../api/types'
+import type { Finding, Summary, TimeSeriesResponse } from '../api/types'
 
 const CHART_RULES: Record<string, 'cpu' | 'memory'> = { R001: 'cpu', R002: 'memory' }
 
@@ -49,6 +49,8 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
           {f.rule_id} · {f.workload.kind}
         </p>
       </div>
+
+      {f.summary && <SummaryCard summary={f.summary} />}
 
       <Card>
         <div className="badge-row" style={{ marginBottom: 'var(--space-4)' }}>
@@ -143,6 +145,42 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
 
       {CHART_RULES[f.rule_id] && <UsageChartCard finding={f} metric={CHART_RULES[f.rule_id]} />}
     </div>
+  )
+}
+
+function SummaryCard({ summary: s }: { summary: Summary }) {
+  const steps = s.next_steps ?? []
+  const notes = s.notes ?? []
+  return (
+    <Card title="Summary" subtitle="Written from this finding's evidence by fixed rules, the same every time. Not AI." className="summary-card">
+      <div className="summary-grid">
+        <section>
+          <h3 className="summary-heading">What happened</h3>
+          <p className="summary-text">{s.what_happened}</p>
+        </section>
+        <section>
+          <h3 className="summary-heading">Why it matters</h3>
+          <p className="summary-text">{s.why_it_matters}</p>
+        </section>
+      </div>
+      {steps.length > 0 && (
+        <section>
+          <h3 className="summary-heading">What to check next</h3>
+          <ol className="summary-steps">
+            {steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+      {notes.length > 0 && (
+        <ul className="summary-notes">
+          {notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
 }
 

@@ -188,4 +188,16 @@ type Finding struct {
 	ConfidenceReason string         `json:"confidence_reason"`
 	Caveats          []string       `json:"caveats"`
 	Cost             *CostImpact    `json:"cost"`
+	Summary          *Summary       `json:"summary"`
+}
+
+// Summary is a plain-language reading of one Finding, produced by fixed per-rule templates in
+// internal/summary from the finding's own evidence -- deterministic and reproducible, never
+// model-generated (AGENTS.md: "AI is never the source of truth"). NextSteps are
+// recommendations for a person to check or do; the analyzer does not act on them.
+type Summary struct {
+	WhatHappened string   `json:"what_happened"`
+	WhyItMatters string   `json:"why_it_matters"`
+	NextSteps    []string `json:"next_steps"`
+	Notes        []string `json:"notes"` // confidence, caveats, and what this finding cannot tell you
 }

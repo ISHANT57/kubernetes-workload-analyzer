@@ -146,3 +146,22 @@ analyzer, so D-007's read-only/least-privilege posture and each cluster's trust 
 unaffected. Combined single-list aggregation is deferred until there's a concrete need for it
 (same "don't build future stages without a reason" principle as the rest of v1).
 **Status: ACCEPTED 2026-09-26**
+
+---
+
+## D-0NN: Finding summaries are fixed per-rule templates, not AI-generated
+
+**Problem:** the finding detail page showed raw evidence only; users asked for a plain-language
+reading of each finding.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Fixed per-rule templates in the backend (chosen)** | Deterministic and reproducible; every number comes from the finding's own evidence; free; unit-tested; cannot invent facts (AGENTS.md: AI is never the source of truth) | Wording is fixed per rule; a new rule needs a template (a generic fallback covers it meanwhile) |
+| LLM-generated summary | Fluent, adapts to any finding | Non-deterministic; can state causes the data does not support; needs a paid API or a local model; sends pod-derived data to a model |
+
+**Decision:** `internal/summary.For(finding)` is a pure function that returns what happened, why it
+matters, next steps to check, and notes (confidence, caveats, what the rule cannot know). It is
+attached to every finding in `findings.Analyze` and shown on the detail page. Causes the metrics
+cannot establish (why a pod restarted, why it is unschedulable) are stated as things to check,
+never as findings. Cost lines are labelled Estimated, never "savings".
+**Status: ACCEPTED 2026-10-08**

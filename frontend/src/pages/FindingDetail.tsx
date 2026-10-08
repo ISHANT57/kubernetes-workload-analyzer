@@ -223,6 +223,7 @@ function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' |
             limit={data.limit}
             formatValue={metric === 'cpu' ? formatCores : formatBytes}
             color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
+            tickUnit={metric === 'memory' ? 1024 * 1024 : undefined}
           />
           <TimeCaption data={data} />
         </>

@@ -54,7 +54,7 @@
 
 .kpi-value {
   font-size: 2.2rem;
-  font-weight: 650;
+  font-weight: var(--kpi-weight);
   line-height: 1.05;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -100,4 +100,33 @@
 
 .kpi-tile-good .kpi-icon {
   background: var(--color-good-bg);
+}
+
+/* Feature tile: one solid, hatched accent tile per row, the single loud element. */
+.kpi-tile-feature {
+  position: relative;
+  overflow: hidden;
+  background: var(--feature-bg);
+  border-color: transparent;
+  color: #fff;
+}
+.kpi-tile-feature::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, var(--feature-hatch) 0 2px, transparent 2px 9px);
+  pointer-events: none;
+}
+.kpi-tile-feature > * {
+  position: relative;
+  z-index: 1;
+}
+.kpi-tile-feature .kpi-label,
+.kpi-tile-feature .kpi-hint,
+.kpi-tile-feature .kpi-value,
+.kpi-tile-feature .kpi-icon {
+  color: #fff;
+}
+.kpi-tile-feature .kpi-icon {
+  background: rgba(255, 255, 255, 0.22);
 }

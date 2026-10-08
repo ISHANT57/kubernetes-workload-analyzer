@@ -6,19 +6,19 @@
   color-scheme: light;
 
   /* Surfaces */
-  --color-bg: #f3f4f8;
-  --color-surface: #ffffff;
+  --color-bg: #e9e8e6;
+  --color-surface: #f9f8f6;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f7f8fb;
-  --color-border: #eceef4;
-  --color-border-strong: #dcdfea;
+  --color-surface-sunken: #efeeeb;
+  --color-border: #e7e5e1;
+  --color-border-strong: #d6d3cd;
 
-  --color-text: #1b2233;
-  --color-text-secondary: #4a5468;
-  --color-text-muted: #7a8396;
+  --color-text: #1c1b1a;
+  --color-text-secondary: #55514c;
+  --color-text-muted: #8a857e;
 
-  --color-critical-bg: #fde8e8;
-  --color-critical-fg: #d92d3a;
+  --color-critical-bg: #fbe2df;
+  --color-critical-fg: #b3261e;
   --color-warning-bg: #fdf0d9;
   --color-warning-fg: #b7701a;
   --color-info-bg: #e6edfd;
@@ -29,18 +29,26 @@
   --color-muted-fg: #626c80;
 
   /* Brand: chrome only (active nav, primary controls). Severity never uses it. */
-  --color-accent: #f2406a;
-  --color-accent-hover: #dc2c58;
-  --color-accent-bg: #ffe6ec;
-  --color-accent-fg: #d12a55;
+  --color-accent: #ff4747;
+  --color-accent-hover: #e63a3a;
+  --color-accent-bg: #ffe3e1;
+  --color-accent-fg: #e03a3a;
   --color-accent-contrast: #ffffff;
 
   /* Page backdrop behind the floating shell */
-  --backdrop: radial-gradient(1100px 640px at 8% 0%, #f1d9f2 0%, transparent 60%),
-    radial-gradient(900px 600px at 100% 100%, #fbc4d4 0%, transparent 60%), #f6e9f3;
-  --shell-bg: rgba(255, 255, 255, 0.72);
-  --shell-border: rgba(255, 255, 255, 0.9);
-  --shell-shadow: 0 30px 80px -24px rgba(170, 60, 110, 0.35);
+  --backdrop: #e4e3e1;
+  --shell-bg: #f1f0ee;
+  --shell-border: #fbfaf9;
+  --shell-shadow: 0 24px 60px -28px rgba(40, 30, 20, 0.28);
+
+  /* Active nav item, solid feature cards, KPI numerals: the places the two themes differ in
+     character, not just colour. */
+  --nav-active-bg: var(--color-accent);
+  --nav-active-fg: #ffffff;
+  --nav-active-shadow: 0 6px 14px -6px color-mix(in srgb, var(--color-accent) 70%, transparent);
+  --feature-bg: var(--color-accent);
+  --feature-hatch: rgba(255, 255, 255, 0.16);
+  --kpi-weight: 300;
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -101,6 +109,13 @@
   --shell-bg: rgba(27, 24, 41, 0.78);
   --shell-border: rgba(255, 255, 255, 0.07);
   --shell-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.7);
+
+  --nav-active-bg: var(--color-surface);
+  --nav-active-fg: var(--color-accent-fg);
+  --nav-active-shadow: var(--shadow-card);
+  --feature-bg: linear-gradient(135deg, #ff8fab 0%, var(--color-accent) 100%);
+  --feature-hatch: rgba(255, 255, 255, 0.1);
+  --kpi-weight: 650;
 
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 10px 28px -10px rgba(0, 0, 0, 0.5);
   --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 16px 34px -10px rgba(0, 0, 0, 0.65);

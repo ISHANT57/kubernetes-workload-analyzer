@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock, toColumns } from './timeRange'
+import { browserZone, coverage, describeDuration, describeWindow, describeZone, formatAxisTick, formatClock, formatDateTime, toColumns } from './timeRange'
 
 // 10:35:00 UTC on 2026-10-08, as the API sends it.
 const T_1035Z = 1791455700
@@ -28,6 +28,25 @@ describe('one instant, two displays (presentation only)', () => {
 
   it('reports a usable browser zone', () => {
     expect(browserZone().length).toBeGreaterThan(0)
+  })
+})
+
+describe('axis and cursor labels (24-hour, like Grafana)', () => {
+  it('labels ticks HH:mm in the chosen zone', () => {
+    expect(formatAxisTick(T_1035Z, 'UTC')).toBe('10:35')
+    expect(formatAxisTick(T_1035Z, 'Asia/Kolkata')).toBe('16:05')
+  })
+
+  it('labels local midnight with the date instead of 00:00', () => {
+    const utcMidnight = 1791417600 // 2026-10-08T00:00:00Z
+    expect(formatAxisTick(utcMidnight, 'UTC')).toBe('10/08')
+    expect(formatAxisTick(utcMidnight, 'Asia/Kolkata')).toBe('05:30') // not midnight in IST
+    expect(formatAxisTick(utcMidnight - 19800, 'Asia/Kolkata')).toBe('10/08') // IST midnight
+  })
+
+  it('formats the cursor time with date and seconds, 24-hour', () => {
+    expect(formatDateTime(T_1035Z, 'UTC')).toBe('2026-10-08 10:35:00')
+    expect(formatDateTime(T_1035Z, 'Asia/Kolkata')).toBe('2026-10-08 16:05:00')
   })
 })
 

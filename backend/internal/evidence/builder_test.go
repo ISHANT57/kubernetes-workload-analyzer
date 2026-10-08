@@ -334,3 +334,60 @@ func TestSeriesRange_AlignsToTheStepGridAsWholeSecondUTCInstants(t *testing.T) {
 		t.Errorf("end renders as %s IST, want 16:05", got)
 	}
 }
+
+// --- CPU series source: Grafana's recording rule first, raw rate as the fallback --------------
+
+func TestCPUUsageSeries_ReadsGrafanasRecordingRuleFirst(t *testing.T) {
+	prom := &recordingPromClient{
+		instant: func(string) (promcommon.Vector, error) {
+			return promcommon.Vector{{Metric: promcommon.Metric{"pod": "web-abc"}, Value: 1}}, nil
+		},
+		rangeFn: func(string) (promcommon.Matrix, error) {
+			return promcommon.Matrix{{Values: []promcommon.SamplePair{{Timestamp: 1000, Value: 0.5}}}}, nil
+		},
+	}
+	b := &Builder{Prom: prom}
+	wl := analyzermodel.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "web"}
+	pts, _, _, err := b.CPUUsageSeries(context.Background(), wl, "c", time.Hour, time.Now())
+	if err != nil || len(pts) != 1 {
+		t.Fatalf("pts=%v err=%v", pts, err)
+	}
+	var rangeQueries []string
+	for _, q := range prom.Queries {
+		if strings.Contains(q, "container_cpu_usage_seconds_total") {
+			rangeQueries = append(rangeQueries, q)
+		}
+	}
+	if len(rangeQueries) != 1 || !strings.Contains(rangeQueries[0], cpuUsageRule) {
+		t.Errorf("want exactly one range query, against the recording rule; got %v", rangeQueries)
+	}
+}
+
+func TestCPUUsageSeries_FallsBackToRawRateWhenTheRuleHasNoData(t *testing.T) {
+	prom := &recordingPromClient{
+		instant: func(string) (promcommon.Vector, error) {
+			return promcommon.Vector{{Metric: promcommon.Metric{"pod": "web-abc"}, Value: 1}}, nil
+		},
+		rangeFn: func(q string) (promcommon.Matrix, error) {
+			if strings.Contains(q, cpuUsageRule) {
+				return promcommon.Matrix{}, nil // rule not installed / no series
+			}
+			return promcommon.Matrix{{Values: []promcommon.SamplePair{{Timestamp: 1000, Value: 0.25}}}}, nil
+		},
+	}
+	b := &Builder{Prom: prom}
+	wl := analyzermodel.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "web"}
+	pts, _, _, err := b.CPUUsageSeries(context.Background(), wl, "c", time.Hour, time.Now())
+	if err != nil || len(pts) != 1 || pts[0].Value != 0.25 {
+		t.Fatalf("want the fallback's point, got pts=%v err=%v", pts, err)
+	}
+	var raw string
+	for _, q := range prom.Queries {
+		if strings.Contains(q, "rate(container_cpu_usage_seconds_total") {
+			raw = q
+		}
+	}
+	if !strings.Contains(raw, "[5m]") || !strings.Contains(raw, `image!=""`) {
+		t.Errorf("fallback must be the 5m cadvisor rate with image!=\"\"; got %q", raw)
+	}
+}

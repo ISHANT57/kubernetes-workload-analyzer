@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import type { BackState } from '../components/ClickableRow'
 import { getFindings, getTimeseries } from '../api/client'
@@ -9,7 +10,7 @@ import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
-import { CHART_WINDOW, browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock } from '../timeRange'
+import { CHART_RANGES, CHART_WINDOW, browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock } from '../timeRange'
 import type { Finding, Summary, TimeSeriesResponse } from '../api/types'
 
 const CHART_RULES: Record<string, 'cpu' | 'memory'> = { R001: 'cpu', R002: 'memory' }
@@ -194,24 +195,41 @@ function SummaryCard({ summary: s }: { summary: Summary }) {
 }
 
 function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' | 'memory' }) {
-  const fetcher = useCallback(
-    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, CHART_WINDOW),
-    [finding.workload.namespace, finding.workload.name, finding.container, finding.workload.kind, metric],
-  )
-  const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
+  const [range, setRange] = useState<string>(CHART_WINDOW)
 
   const grafanaLink = (
     <a href={grafanaWorkloadUrl(finding.workload.namespace, finding.workload.name, finding.workload.kind)} target="_blank" rel="noreferrer">
       Investigate in Grafana ↗
     </a>
   )
+  const picker = (
+    <div className="range-picker" role="group" aria-label="Chart range">
+      {CHART_RANGES.map((r) => (
+        <button key={r} type="button" className={r === range ? 'on' : ''} aria-pressed={r === range} onClick={() => setRange(r)}>
+          {r}
+        </button>
+      ))}
+    </div>
+  )
+
+  // keyed by range: usePolling does not refetch when its fetcher changes, so a new range remounts
+  // the panel and fetches fresh.
+  return <UsageChartPanel key={range} finding={finding} metric={metric} range={range} actions={<>{picker}{grafanaLink}</>} />
+}
+
+function UsageChartPanel({ finding, metric, range, actions }: { finding: Finding; metric: 'cpu' | 'memory'; range: string; actions: ReactNode }) {
+  const fetcher = useCallback(
+    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, range),
+    [finding.workload.namespace, finding.workload.name, finding.container, finding.workload.kind, metric, range],
+  )
+  const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
 
   const data = series.status === 'ok' ? series.data : null
   return (
     <Card
       title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`}
       subtitle={data ? `Requested: last ${describeWindow(data.window_seconds)}` : undefined}
-      actions={grafanaLink}
+      actions={actions}
     >
       {series.status === 'loading' && <LoadingState label="Loading chart…" />}
       {series.status === 'error' && <ErrorState message={series.error} />}

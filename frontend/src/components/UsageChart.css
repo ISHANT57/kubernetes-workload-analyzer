@@ -33,3 +33,34 @@
   margin: 0 0 var(--space-1);
   max-width: 90ch;
 }
+
+.range-picker {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--color-muted-bg);
+  border-radius: var(--radius-pill);
+}
+
+.range-picker button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.range-picker button:hover {
+  color: var(--color-text);
+}
+
+.range-picker button.on {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-card);
+}

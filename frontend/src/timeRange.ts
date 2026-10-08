@@ -11,6 +11,10 @@ import type { TimeSeriesPoint } from './api/types'
  * so the label cannot say 24 hours while the request asks for something else. */
 export const CHART_WINDOW = '24h'
 
+/** Ranges a person can pick for the usage charts. 1h matches Grafana's default view; 24h is the
+ * default here because rightsizing is judged over a day. The backend clamps anything above 48h. */
+export const CHART_RANGES = ['1h', '6h', '24h', '48h'] as const
+
 /** The browser's IANA zone, e.g. "Asia/Kolkata". Falls back to UTC if the runtime hides it. */
 export function browserZone(): string {
   try {
@@ -23,6 +27,25 @@ export function browserZone(): string {
 /** "HH:mm" for a Unix-seconds instant in the given IANA zone (24-hour clock). */
 export function formatClock(unixSeconds: number, timeZone: string): string {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(unixSeconds * 1000))
+}
+
+function parts(unixSeconds: number, timeZone: string, opts: Intl.DateTimeFormatOptions): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const p of new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', ...opts }).formatToParts(new Date(unixSeconds * 1000))) out[p.type] = p.value
+  return out
+}
+
+/** An axis tick the way Grafana labels it: "16:05" on a day, "10/09" at local midnight. 24-hour
+ * clock, in the given zone. */
+export function formatAxisTick(unixSeconds: number, timeZone: string): string {
+  const p = parts(unixSeconds, timeZone, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return p.hour === '00' && p.minute === '00' ? `${p.month}/${p.day}` : `${p.hour}:${p.minute}`
+}
+
+/** "2026-10-08 16:05:00": the cursor readout, 24-hour, in the given zone. */
+export function formatDateTime(unixSeconds: number, timeZone: string): string {
+  const p = parts(unixSeconds, timeZone, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`
 }
 
 /** "Asia/Kolkata (UTC+05:30)": the zone and its offset at that instant, so a reader can map the

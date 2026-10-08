@@ -2,7 +2,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { useEffect, useRef } from 'react'
 import type { TimeSeriesPoint } from '../api/types'
-import { browserZone, toColumns } from '../timeRange'
+import { browserZone, formatAxisTick, formatDateTime, toColumns } from '../timeRange'
 import './UsageChart.css'
 
 interface Props {
@@ -51,7 +51,7 @@ export function UsageChart({ points, request, limit, formatValue, color, tickUni
     // The hover legend shows the same units as the axis, not raw numbers (bytes, or cores).
     const legendValue = (_u: uPlot, v: number | null) => (v == null ? '--' : formatValue(v))
     const series: uPlot.Series[] = [
-      {},
+      { value: (_u: uPlot, t: number | null) => (t == null ? '--' : formatDateTime(t, zone)) },
       { label: 'usage', stroke: resolve(color), width: 2, points: { show: false }, value: legendValue },
       { label: 'request', stroke: mutedStroke, width: 1.5, dash: [5, 4], points: { show: false }, value: legendValue },
     ]
@@ -76,7 +76,8 @@ export function UsageChart({ points, request, limit, formatValue, color, tickUni
       // stays UTC instants. Stated explicitly so it does not depend on a library default.
       tzDate: (ts: number) => uPlot.tzDate(new Date(ts * 1000), zone),
       axes: [
-        { ...axis, space: 60 },
+        // 24-hour labels in the display zone, as Grafana draws them.
+        { ...axis, space: 60, values: (_u: uPlot, splits: number[]) => splits.map((t) => formatAxisTick(t, zone)) },
         {
           ...axis,
           values: (_u: uPlot, vals: number[]) => vals.map(formatValue),

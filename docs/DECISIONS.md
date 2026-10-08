@@ -230,3 +230,24 @@ returned whole-second `t` was up to 999 ms off the instant actually evaluated.
 - `grafana.defaultDashboardsTimezone: browser` so bundled dashboards follow the viewer's zone.
 - `vitest` added as a dev dependency (FREE LOCAL, build-time only) for the first frontend tests.
 **Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-013 Usage charts read the same series as Grafana
+
+**Problem:** the app's usage chart and Grafana's panel showed slightly different numbers for the
+same pod (for example CPU 4.19m vs 4.35m).
+
+**Measured:** Grafana's "CPU Usage" panel reads kube-prometheus-stack's recording rule
+`node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m`, which Prometheus
+evaluates on its own schedule. A raw `rate(...[5m])` evaluated at an exact grid time differed from
+it by 6.6% on average (up to 69% at one point), and the app's old 2-minute rate by 9%.
+
+**Decision:** the chart's CPU series queries that recording rule, falling back to the equivalent
+raw 5m cadvisor rate (`image!=""`) if the rule has no data. Memory already matched and gains
+`image!=""` for parity. Axis labels are 24-hour (`HH:mm`, `MM/DD` at midnight), the cursor shows
+`YYYY-MM-DD HH:mm:ss`, CPU below 10m shows one decimal, and a 1h/6h/24h/48h picker lets the chart
+use Grafana's default 1h view. Verified: 481 of 481 points (CPU and memory, two workloads)
+equal Grafana's own datasource query at the same timestamps. Rule evidence for findings is
+unchanged, so a finding's p95 can differ slightly from the chart's line.
+**Status: ACCEPTED 2026-10-08**

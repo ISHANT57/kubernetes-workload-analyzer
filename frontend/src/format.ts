@@ -3,6 +3,8 @@
 
 export function formatCores(cores: number): string {
   if (cores === 0) return '0m'
+  // Below 10m a whole number hides real differences (4.2m vs 4.4m), so keep one decimal.
+  if (cores < 0.01) return `${(cores * 1000).toFixed(1)}m`
   if (cores < 1) return `${Math.round(cores * 1000)}m`
   return `${cores.toFixed(2)}`
 }

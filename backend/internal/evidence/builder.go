@@ -64,6 +64,10 @@ func (b *Builder) ResolveContainers(ctx context.Context, workload analyzermodel.
 // able to trigger an arbitrarily expensive 7-day-at-fine-resolution query on demand.
 const maxSeriesWindow = 48 * time.Hour
 
+// cpuUsageRule is kube-prometheus-stack's per-container CPU recording rule, the source of Grafana's
+// "CPU Usage" panels.
+const cpuUsageRule = `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m`
+
 // CPUUsageSeries returns CPU usage points (max across live pods at each timestamp) for the
 // dashboard's usage-over-time chart, along with the current request/limit for the reference
 // lines drawn alongside it. window is capped at maxSeriesWindow.
@@ -79,9 +83,17 @@ func (b *Builder) CPUUsageSeries(ctx context.Context, workload analyzermodel.Wor
 	ns := workload.Namespace
 	podSelector := podRegex(podNames)
 
-	query := fmt.Sprintf(`max(rate(container_cpu_usage_seconds_total{namespace=%q,pod=~%q,container=%q}[2m])) by (pod)`, ns, podSelector, container)
 	start, end, step := SeriesRange(now, window)
-	matrix, err := b.Prom.QueryRange(ctx, query, start, end, step)
+	// Read the same series Grafana's "CPU Usage" panel reads (kube-prometheus-stack's recording
+	// rule over a 5m rate), so the chart shows Grafana's numbers. A raw rate() evaluated at the
+	// exact grid time differs from the rule's value, which Prometheus evaluates on its own
+	// schedule. If the rule has no data (rules disabled), fall back to the equivalent raw query.
+	ruleQuery := fmt.Sprintf(`max(%s{namespace=%q,pod=~%q,container=%q}) by (pod)`, cpuUsageRule, ns, podSelector, container)
+	matrix, err := b.Prom.QueryRange(ctx, ruleQuery, start, end, step)
+	if err == nil && len(matrix) == 0 {
+		rawQuery := fmt.Sprintf(`max(rate(container_cpu_usage_seconds_total{job="kubelet",metrics_path="/metrics/cadvisor",namespace=%q,pod=~%q,container=%q,image!=""}[5m])) by (pod)`, ns, podSelector, container)
+		matrix, err = b.Prom.QueryRange(ctx, rawQuery, start, end, step)
+	}
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("cpu usage series: %w", err)
 	}
@@ -103,7 +115,7 @@ func (b *Builder) MemoryUsageSeries(ctx context.Context, workload analyzermodel.
 	ns := workload.Namespace
 	podSelector := podRegex(podNames)
 
-	query := fmt.Sprintf(`max(container_memory_working_set_bytes{namespace=%q,pod=~%q,container=%q}) by (pod)`, ns, podSelector, container)
+	query := fmt.Sprintf(`max(container_memory_working_set_bytes{namespace=%q,pod=~%q,container=%q,image!=""}) by (pod)`, ns, podSelector, container)
 	start, end, step := SeriesRange(now, window)
 	matrix, err := b.Prom.QueryRange(ctx, query, start, end, step)
 	if err != nil {

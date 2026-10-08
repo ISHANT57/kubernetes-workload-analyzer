@@ -165,3 +165,22 @@ attached to every finding in `findings.Analyze` and shown on the detail page. Ca
 cannot establish (why a pod restarted, why it is unschedulable) are stated as things to check,
 never as findings. Cost lines are labelled Estimated, never "savings".
 **Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-010 Grafana anonymous read-only access (local demo only)
+
+**Problem:** the dashboard links each resource finding to Grafana, which asked for a login, a poor
+experience for a local demo.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Anonymous Viewer role, local demo only (chosen)** | Links open straight to the panel; Viewer cannot write (verified: POST returns 403); admin login still works | Anyone who can reach Grafana can read the cluster's metrics |
+| Keep login | Strongest posture | Friction on every link |
+| Remove the Grafana link | No exposure | Loses the drill-down; the in-app chart covers only request vs usage |
+
+**Decision:** `grafana.ini` sets `auth.anonymous` to enabled with the `Viewer` role in
+`deploy/prometheus/values.yaml`. Services stay ClusterIP and are reached by port-forward on
+localhost, so nothing is exposed to the network. This block must be removed for any shared or
+production cluster. Supersedes the "no anonymous access" stance in the earlier Grafana threat-model row.
+**Status: ACCEPTED 2026-10-08** (owner asked for no login)

@@ -186,7 +186,8 @@ kubectl --context kind-workload-analyzer -n analyzer get pods
 kubectl --context kind-workload-analyzer -n monitoring get pods
 kubectl --context kind-workload-analyzer -n demo get pods
 
-# Grafana login (username is `admin`, never an email). Prints the password to your terminal:
+# Grafana opens without a login (anonymous read-only, local demo only, D-010). To edit
+# dashboards, log in as `admin` (never an email); this prints the password to your terminal:
 kubectl --context kind-workload-analyzer -n monitoring get secret grafana-admin \
   -o jsonpath='{.data.admin-password}' | base64 -d; echo
 

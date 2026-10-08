@@ -565,7 +565,7 @@ table.data-table a:hover {
 }
 .run-meta dt {
   font-size: 0.8rem;
-  opacity: 0.85;
+  font-weight: 500;
 }
 .run-meta dd {
   margin: 2px 0 0;

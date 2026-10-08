@@ -1,0 +1,64 @@
+.sev-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.sev-col {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-border-strong);
+  border-radius: 2px;
+}
+.sev-col-critical {
+  border-left-color: var(--color-critical-fg);
+}
+.sev-col-warning {
+  border-left-color: var(--color-warning-fg);
+}
+.sev-col-info {
+  border-left-color: var(--color-info-fg);
+}
+
+.sev-col-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.sev-col-value {
+  font-size: 1.9rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.sev-col-share {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.sev-bar {
+  display: flex;
+  gap: 6px;
+  height: 36px;
+}
+
+.sev-seg {
+  min-width: 8px;
+  border-radius: 4px;
+  --tick: var(--color-border-strong);
+  background: repeating-linear-gradient(90deg, var(--tick) 0 3px, transparent 3px 7px);
+  transition: flex-grow 0.4s var(--ease);
+}
+.sev-seg-critical {
+  --tick: var(--color-critical-fg);
+}
+.sev-seg-warning {
+  --tick: var(--color-warning-fg);
+}
+.sev-seg-info {
+  --tick: var(--color-info-fg);
+}

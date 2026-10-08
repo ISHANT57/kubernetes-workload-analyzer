@@ -1,42 +1,50 @@
-/* Design tokens. Dark-first (the production observability look this dashboard is modelled on),
-   with a light counterpart kept at full parity -- both themes are rendered and checked live, so
-   neither is an afterthought. Every colour below is a token: no component hard-codes a hex. */
+/* Design tokens. Light is the default; dark is applied with data-theme="dark" on <html> by
+   theme.ts (stored choice, else the OS preference). Both themes are checked live. Every colour is
+   a token: no component hard-codes a hex. The rose accent is chrome only (active nav, primary
+   controls); severity colours never borrow it, so "red" always means a finding. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  /* Surfaces, light theme */
-  --color-bg: #f5f6fa;
+  /* Surfaces */
+  --color-bg: #f3f4f8;
   --color-surface: #ffffff;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #fafbfd;
+  --color-surface-sunken: #f7f8fb;
   --color-border: #eceef4;
-  --color-border-strong: #d9dde8;
+  --color-border-strong: #dcdfea;
 
-  /* Text, light theme */
   --color-text: #1b2233;
-  --color-text-secondary: #4a5667;
-  --color-text-muted: #6b7889;
+  --color-text-secondary: #4a5468;
+  --color-text-muted: #7a8396;
 
-  /* Status: -fg is the readable foreground / solid fill, -bg the tinted background */
-  --color-critical-bg: #fde6e4;
-  --color-critical-fg: #c0362c;
-  --color-warning-bg: #fcefd6;
-  --color-warning-fg: #9a6410;
-  --color-info-bg: #e9e9fb;
-  --color-info-fg: #4f4fc4;
-  --color-good-bg: #ddf3e6;
-  --color-good-fg: #1c7a46;
-  --color-muted-bg: #eaedf2;
-  --color-muted-fg: #5d6a7c;
-  --color-accent-bg: #ece4fc;
-  --color-accent-fg: #6b40c8;
+  --color-critical-bg: #fde8e8;
+  --color-critical-fg: #d92d3a;
+  --color-warning-bg: #fdf0d9;
+  --color-warning-fg: #b7701a;
+  --color-info-bg: #e6edfd;
+  --color-info-fg: #3b63d8;
+  --color-good-bg: #dff5e8;
+  --color-good-fg: #1d8a4f;
+  --color-muted-bg: #eef0f5;
+  --color-muted-fg: #626c80;
 
-  --color-accent: #5b5bd6;
+  /* Brand: chrome only (active nav, primary controls). Severity never uses it. */
+  --color-accent: #f2406a;
+  --color-accent-hover: #dc2c58;
+  --color-accent-bg: #ffe6ec;
+  --color-accent-fg: #d12a55;
+  --color-accent-contrast: #ffffff;
+
+  /* Page backdrop behind the floating shell */
+  --backdrop: radial-gradient(1100px 640px at 8% 0%, #f1d9f2 0%, transparent 60%),
+    radial-gradient(900px 600px at 100% 100%, #fbc4d4 0%, transparent 60%), #f6e9f3;
+  --shell-bg: rgba(255, 255, 255, 0.72);
+  --shell-border: rgba(255, 255, 255, 0.9);
+  --shell-shadow: 0 30px 80px -24px rgba(170, 60, 110, 0.35);
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* One spacing scale, so every gap in the app is a multiple of the same unit */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -47,49 +55,55 @@
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 22px;
+  --radius-xl: 28px;
   --radius-pill: 999px;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  /* One elevation device, used on content panels only -- chrome stays flat with a hairline
-     border, so depth always signals "this is content", never decoration. */
-  --shadow-card: 0 1px 2px rgba(27, 34, 51, 0.03), 0 8px 24px -8px rgba(27, 34, 51, 0.08);
+  --shadow-card: 0 1px 2px rgba(27, 34, 51, 0.03), 0 6px 20px -8px rgba(27, 34, 51, 0.08);
   --shadow-hover: 0 2px 4px rgba(27, 34, 51, 0.04), 0 14px 32px -10px rgba(27, 34, 51, 0.14);
 
-  --sidebar-width: 232px;
-  --header-height: 56px;
+  --sidebar-width: 244px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0e111d;
-    --color-surface: #161a2b;
-    --color-surface-raised: #1c2136;
-    --color-surface-sunken: #121626;
-    --color-border: #232843;
-    --color-border-strong: #333a5c;
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-    --color-text: #e6edf5;
-    --color-text-secondary: #9fb0c4;
-    --color-text-muted: #71829a;
+  --color-bg: #12101c;
+  --color-surface: #1b1829;
+  --color-surface-raised: #221e33;
+  --color-surface-sunken: #161422;
+  --color-border: #2b2740;
+  --color-border-strong: #3a3556;
 
-    --color-critical-bg: #3a1614;
-    --color-critical-fg: #ff7b72;
-    --color-warning-bg: #3a2c12;
-    --color-warning-fg: #e3a53f;
-    --color-info-bg: #23264d;
-    --color-info-fg: #a5a8ff;
-    --color-good-bg: #12301f;
-    --color-good-fg: #46d18a;
-    --color-muted-bg: #1d2634;
-    --color-muted-fg: #94a3b8;
-    --color-accent-bg: #241b3d;
-    --color-accent-fg: #b795f8;
+  --color-text: #f0eef8;
+  --color-text-secondary: #b6b1cc;
+  --color-text-muted: #8a85a3;
 
-    --color-accent: #8b8dff;
+  --color-critical-bg: #3d1820;
+  --color-critical-fg: #ff7a85;
+  --color-warning-bg: #3b2a14;
+  --color-warning-fg: #f0b45a;
+  --color-info-bg: #1f2850;
+  --color-info-fg: #8fabff;
+  --color-good-bg: #123325;
+  --color-good-fg: #4fd696;
+  --color-muted-bg: #25213a;
+  --color-muted-fg: #a39fbd;
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 10px 28px -10px rgba(0, 0, 0, 0.5);
-    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 16px 34px -10px rgba(0, 0, 0, 0.65);
-  }
+  --color-accent: #ff5d84;
+  --color-accent-hover: #ff7a9b;
+  --color-accent-bg: #3a1a2b;
+  --color-accent-fg: #ff8fab;
+  --color-accent-contrast: #1b0d14;
+
+  --backdrop: radial-gradient(1000px 600px at 6% 0%, #3a1f4d 0%, transparent 60%),
+    radial-gradient(900px 600px at 100% 100%, #5a1f3d 0%, transparent 60%), #0d0b16;
+  --shell-bg: rgba(27, 24, 41, 0.78);
+  --shell-border: rgba(255, 255, 255, 0.07);
+  --shell-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.7);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 10px 28px -10px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 16px 34px -10px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -103,8 +117,11 @@ body,
 }
 
 body {
+  background: var(--backdrop) fixed;
+}
+
+body {
   margin: 0;
-  background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 14px;

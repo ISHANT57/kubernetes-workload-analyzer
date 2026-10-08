@@ -43,8 +43,13 @@
 
 .kpi-icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   color: var(--color-text-muted);
-  opacity: 0.8;
+  background: var(--color-muted-bg);
 }
 
 .kpi-value {
@@ -79,4 +84,20 @@
 .kpi-tile-good .kpi-value,
 .kpi-tile-good .kpi-icon {
   color: var(--color-good-fg);
+}
+
+.kpi-tile-critical .kpi-icon {
+  background: var(--color-critical-bg);
+}
+
+.kpi-tile-warning .kpi-icon {
+  background: var(--color-warning-bg);
+}
+
+.kpi-tile-info .kpi-icon {
+  background: var(--color-info-bg);
+}
+
+.kpi-tile-good .kpi-icon {
+  background: var(--color-good-bg);
 }

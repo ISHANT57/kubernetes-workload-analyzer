@@ -466,3 +466,129 @@ table.data-table a {
 table.data-table a:hover {
   color: var(--color-accent);
 }
+
+/* ---------------------------------------------------------------------------------------
+   Overview dashboard grid: 12 columns so the panels line up edge to edge
+   --------------------------------------------------------------------------------------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.dash-grid > .card {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-grid > .card > .card-body {
+  flex: 1;
+}
+
+.dash-severity {
+  grid-column: span 7;
+}
+.dash-gauge {
+  grid-column: span 5;
+}
+.dash-attention {
+  grid-column: span 7;
+}
+.dash-run {
+  grid-column: span 5;
+}
+.dash-table {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 1100px) {
+  .dash-severity,
+  .dash-gauge,
+  .dash-attention,
+  .dash-run {
+    grid-column: 1 / -1;
+  }
+}
+
+.gauge-note {
+  text-align: center;
+}
+
+.attention-card.attention-critical {
+  background: linear-gradient(90deg, var(--color-critical-bg), var(--color-surface-sunken) 55%);
+}
+.attention-card.attention-warning {
+  background: linear-gradient(90deg, var(--color-warning-bg), var(--color-surface-sunken) 55%);
+}
+
+.pill-link {
+  display: inline-block;
+  padding: 0.4rem var(--space-4);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text);
+  text-decoration: none;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+.pill-link:hover {
+  background: var(--color-accent-bg);
+  border-color: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+/* The run card is the one place the brand gradient is used at full strength. Colour here is
+   chrome, not severity: a failed or partial run still says so in words. */
+.dash-run {
+  background: linear-gradient(135deg, #ff8fab 0%, var(--color-accent) 100%);
+  border-color: transparent;
+  color: #fff;
+}
+.dash-run .card-title {
+  color: #fff;
+}
+.dash-run .run-status {
+  font-size: 2.2rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  text-transform: capitalize;
+  line-height: 1.1;
+}
+.run-meta {
+  margin: var(--space-5) 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+.run-meta dt {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.run-meta dd {
+  margin: 2px 0 0;
+  font-weight: 650;
+  font-size: 1rem;
+}
+.run-errors {
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: var(--radius-sm);
+}
+
+.dash-severity > .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dash-run > .card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}

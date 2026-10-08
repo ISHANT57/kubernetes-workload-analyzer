@@ -158,8 +158,10 @@
 }
 
 .content-inner {
-  max-width: 1200px;
-  margin: 0 auto;
+  /* Fill the column so the breadcrumb, heading and cards share one left edge. The cap only
+     stops cards stretching absurdly on ultra-wide screens. */
+  max-width: 1760px;
+  margin: 0;
 }
 
 @media (max-width: 860px) {

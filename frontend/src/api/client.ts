@@ -1,5 +1,6 @@
 // Thin, typed wrapper around the backend's JSON API. Every call goes through this file -- no
 // component calls fetch() directly -- so the base path and error handling are defined once.
+import { CHART_WINDOW } from '../timeRange'
 import type { AnalysisRun, ClusterSummary, ClustersInfo, Finding, TimeSeriesResponse } from './types'
 
 // Empty string: same-origin, matching how the backend serves the built frontend in production
@@ -51,7 +52,7 @@ export function getTimeseries(
   container: string,
   metric: 'cpu' | 'memory',
   kind = 'Deployment',
-  window = '24h',
+  window: string = CHART_WINDOW,
 ): Promise<TimeSeriesResponse> {
   const params = new URLSearchParams({ namespace, workload, container, metric, kind, window })
   return getJSON<TimeSeriesResponse>(`/api/timeseries?${params}`)

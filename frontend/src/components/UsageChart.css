@@ -22,3 +22,14 @@
   border: 1px dashed var(--color-border-strong);
   border-radius: var(--radius-md);
 }
+
+.chart-caption {
+  margin-top: var(--space-3);
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.chart-caption p {
+  margin: 0 0 var(--space-1);
+  max-width: 90ch;
+}

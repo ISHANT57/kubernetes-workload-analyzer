@@ -9,6 +9,7 @@ import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
 import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
+import { CHART_WINDOW, browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock } from '../timeRange'
 import type { Finding, Summary, TimeSeriesResponse } from '../api/types'
 
 const CHART_RULES: Record<string, 'cpu' | 'memory'> = { R001: 'cpu', R002: 'memory' }
@@ -194,7 +195,7 @@ function SummaryCard({ summary: s }: { summary: Summary }) {
 
 function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' | 'memory' }) {
   const fetcher = useCallback(
-    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, '24h'),
+    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, CHART_WINDOW),
     [finding.workload.namespace, finding.workload.name, finding.container, finding.workload.kind, metric],
   )
   const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
@@ -205,19 +206,48 @@ function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' |
     </a>
   )
 
+  const data = series.status === 'ok' ? series.data : null
   return (
-    <Card title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`} subtitle="Last 24 hours" actions={grafanaLink}>
+    <Card
+      title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`}
+      subtitle={data ? `Requested: last ${describeWindow(data.window_seconds)}` : undefined}
+      actions={grafanaLink}
+    >
       {series.status === 'loading' && <LoadingState label="Loading chart…" />}
       {series.status === 'error' && <ErrorState message={series.error} />}
-      {series.status === 'ok' && (
-        <UsageChart
-          points={series.data.points}
-          request={series.data.request}
-          limit={series.data.limit}
-          formatValue={metric === 'cpu' ? formatCores : formatBytes}
-          color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
-        />
+      {data && (
+        <>
+          <UsageChart
+            points={data.points}
+            request={data.request}
+            limit={data.limit}
+            formatValue={metric === 'cpu' ? formatCores : formatBytes}
+            color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
+          />
+          <TimeCaption data={data} />
+        </>
       )}
     </Card>
+  )
+}
+
+/** States what the chart's clock means and how much of the requested range has data, so the axis
+ * can be matched against Grafana (which may be set to UTC) without guessing. */
+function TimeCaption({ data }: { data: TimeSeriesResponse }) {
+  const cov = coverage(data.points, data.window_seconds, data.step_seconds)
+  if (!cov) return null
+  const zone = browserZone()
+  return (
+    <div className="chart-caption">
+      {cov.partial && (
+        <p>
+          Only {describeDuration(cov.coveredSeconds)} of the last {describeWindow(cov.requestedSeconds)} has data: the earliest sample is at {formatClock(cov.firstT, zone)}. The series, or
+          Prometheus itself, is newer than the range requested.
+        </p>
+      )}
+      <p>
+        Times are shown in {describeZone(zone, cov.lastT)}. Latest sample {formatClock(cov.lastT, zone)} ({formatClock(cov.lastT, 'UTC')} UTC).
+      </p>
+    </div>
   )
 }

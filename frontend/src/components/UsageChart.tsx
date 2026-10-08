@@ -2,6 +2,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { useEffect, useRef } from 'react'
 import type { TimeSeriesPoint } from '../api/types'
+import { browserZone, toColumns } from '../timeRange'
 import './UsageChart.css'
 
 interface Props {
@@ -36,9 +37,10 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
     const mutedStroke = styles.getPropertyValue('--color-text-muted').trim() || '#94a3b8'
     const criticalStroke = styles.getPropertyValue('--color-critical-fg').trim() || '#f87171'
 
-    const xs = points.map((p) => p.t)
-    const ys = points.map((p) => p.v)
+    // x is Unix seconds, exactly as the API sent it. uPlot's time axis expects seconds.
+    const { xs, ys } = toColumns(points)
     const requestLine = xs.map(() => request)
+    const zone = browserZone()
 
     const series: uPlot.Series[] = [
       {},
@@ -62,6 +64,9 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
       height: 220,
       series,
       scales: { x: { time: true } },
+      // Presentation only: tick labels and the cursor readout use the browser's zone. The data
+      // stays UTC instants. Stated explicitly so it does not depend on a library default.
+      tzDate: (ts: number) => uPlot.tzDate(new Date(ts * 1000), zone),
       axes: [
         { ...axis, space: 60 },
         { ...axis, values: (_u: uPlot, vals: number[]) => vals.map(formatValue), size: 70 },

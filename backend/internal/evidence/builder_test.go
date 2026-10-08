@@ -19,6 +19,10 @@ type recordingPromClient struct {
 	instant func(query string) (promcommon.Vector, error)
 	rangeFn func(query string) (promcommon.Matrix, error)
 	Queries []string
+
+	// The range of the most recent QueryRange call, so a test can assert the exact window queried.
+	LastStart, LastEnd time.Time
+	LastStep           time.Duration
 }
 
 func (f *recordingPromClient) Healthy(ctx context.Context) error { return nil }
@@ -31,6 +35,7 @@ func (f *recordingPromClient) QueryInstant(ctx context.Context, query string) (p
 }
 func (f *recordingPromClient) QueryRange(ctx context.Context, query string, start, end time.Time, step time.Duration) (promcommon.Matrix, error) {
 	f.Queries = append(f.Queries, query)
+	f.LastStart, f.LastEnd, f.LastStep = start, end, step
 	if f.rangeFn != nil {
 		return f.rangeFn(query)
 	}
@@ -230,5 +235,102 @@ func TestBuild_SchedulableRunningPod_BothFalse(t *testing.T) {
 
 	if ev.Scheduling.Pending || ev.Scheduling.Unschedulable {
 		t.Errorf("Scheduling = %+v, want both false for a normal running pod", ev.Scheduling)
+	}
+}
+
+// --- time model: UTC instants in, the same instants out ---------------------------------------
+//
+// A series' timestamps must reach the API as the exact Unix instants Prometheus reported: no zone
+// offset baked in, no unit change. The browser alone converts to a local zone, for display.
+
+func TestMatrixToPoints_PreservesExactUnixSeconds(t *testing.T) {
+	// 10:35:00 UTC on 2026-10-08. The same instant is 16:05 IST; the API must carry 1791455700,
+	// never 1791455700 +/- 19800.
+	const want = int64(1791455700)
+	matrix := promcommon.Matrix{{
+		Metric: promcommon.Metric{"pod": "p"},
+		Values: []promcommon.SamplePair{
+			{Timestamp: promcommon.TimeFromUnixNano(want * int64(time.Second)), Value: 0.25},
+			{Timestamp: promcommon.TimeFromUnixNano((want + 300) * int64(time.Second)), Value: 0.5},
+		},
+	}}
+	got := matrixToPoints(matrix)
+	if len(got) != 2 || got[0].UnixSeconds != want || got[1].UnixSeconds != want+300 {
+		t.Fatalf("points = %+v, want exact instants %d and %d", got, want, want+300)
+	}
+	if utc := time.Unix(got[0].UnixSeconds, 0).UTC().Format("15:04"); utc != "10:35" {
+		t.Errorf("instant renders as %s UTC, want 10:35", utc)
+	}
+}
+
+func TestMatrixToPoints_SubSecondTimestampTruncatesNotRounds(t *testing.T) {
+	// Prometheus samples carry milliseconds (e.g. 10:35:00.999). Unix() truncates, so a sample is
+	// never reported a second late.
+	ts := promcommon.TimeFromUnixNano(1791455700*int64(time.Second) + 999*int64(time.Millisecond))
+	got := matrixToPoints(promcommon.Matrix{{Values: []promcommon.SamplePair{{Timestamp: ts, Value: 1}}}})
+	if got[0].UnixSeconds != 1791455700 {
+		t.Errorf("t = %d, want 1791455700", got[0].UnixSeconds)
+	}
+}
+
+func TestCPUUsageSeries_QueriesTheRequestedWindowEndingNow(t *testing.T) {
+	prom := &recordingPromClient{
+		instant: func(query string) (promcommon.Vector, error) {
+			return promcommon.Vector{{Metric: promcommon.Metric{"pod": "web-abc"}, Value: 1}}, nil
+		},
+	}
+	b := &Builder{Prom: prom}
+	now := time.Date(2026, 10, 8, 10, 37, 41, 482_000_000, time.UTC) // deliberately off-grid, with milliseconds
+	wl := analyzermodel.WorkloadRef{Namespace: "demo", Kind: "Deployment", Name: "web"}
+
+	for _, tc := range []struct {
+		name   string
+		window time.Duration
+		want   time.Duration
+		step   time.Duration
+	}{
+		{"1h", time.Hour, time.Hour, 30 * time.Second},
+		{"24h is really 24h", 24 * time.Hour, 24 * time.Hour, 5 * time.Minute},
+		{"over the cap is clamped to 48h", 90 * time.Hour, 48 * time.Hour, 5 * time.Minute},
+		{"non-positive falls back to 48h", 0, 48 * time.Hour, 5 * time.Minute},
+	} {
+		if _, _, _, err := b.CPUUsageSeries(context.Background(), wl, "c", tc.window, now); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		// The end is now aligned down to the step grid (epoch-based), never later than now and
+		// less than one step before it.
+		if prom.LastEnd.After(now) || now.Sub(prom.LastEnd) >= tc.step || prom.LastEnd.UnixNano()%int64(tc.step) != 0 {
+			t.Errorf("%s: end = %v, want now (%v) aligned down to a multiple of %v", tc.name, prom.LastEnd, now, tc.step)
+		}
+		if got := prom.LastEnd.Sub(prom.LastStart); got != tc.want {
+			t.Errorf("%s: queried %v, want %v", tc.name, got, tc.want)
+		}
+		if prom.LastStep != tc.step {
+			t.Errorf("%s: step = %v, want %v", tc.name, prom.LastStep, tc.step)
+		}
+	}
+}
+
+func TestSeriesRange_AlignsToTheStepGridAsWholeSecondUTCInstants(t *testing.T) {
+	// 10:37:41.482 UTC. With a 5m step the grid end is 10:35:00 UTC = 16:05 IST, a whole second.
+	now := time.Date(2026, 10, 8, 10, 37, 41, 482_000_000, time.UTC)
+	start, end, step := SeriesRange(now, 24*time.Hour)
+	if step != 5*time.Minute {
+		t.Fatalf("step = %v, want 5m", step)
+	}
+	if end.Unix() != 1791455700 || end.Nanosecond() != 0 {
+		t.Errorf("end = %d.%09d, want exactly 1791455700 (10:35:00Z)", end.Unix(), end.Nanosecond())
+	}
+	if end.Sub(start) != 24*time.Hour {
+		t.Errorf("span = %v, want exactly the 24h window", end.Sub(start))
+	}
+	// Zone independence: the same instant described in IST aligns to the same end.
+	ist := time.FixedZone("IST", 5*3600+30*60)
+	_, endIST, _ := SeriesRange(now.In(ist), 24*time.Hour)
+	if !endIST.Equal(end) {
+		t.Errorf("end differs by zone: %v vs %v", endIST, end)
+	}
+	if got := end.In(ist).Format("15:04"); got != "16:05" {
+		t.Errorf("end renders as %s IST, want 16:05", got)
 	}
 }

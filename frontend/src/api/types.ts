@@ -110,7 +110,13 @@ export interface TimeSeriesResponse {
   metric: 'cpu' | 'memory'
   request: number
   limit: number
-  points: TimeSeriesPoint[]
+  points: TimeSeriesPoint[] // t is Unix seconds (a UTC instant), v is the value
+  // The range the backend actually queried, as Unix seconds. window_seconds can be shorter or
+  // longer than asked for if the backend clamped it.
+  from: number
+  to: number
+  window_seconds: number
+  step_seconds: number
 }
 
 export interface ClusterPeer {

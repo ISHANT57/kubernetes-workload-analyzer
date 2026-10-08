@@ -206,12 +206,16 @@ func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 			window = d
 		}
 	}
+	// The range actually queried, which can differ from the one asked for (non-positive or
+	// over-long windows are clamped). Computed once and used for both the query and the response.
+	window = evidence.ClampWindow(window)
+	now := time.Now()
+	from, to, step := evidence.SeriesRange(now, window)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
 	wl := model.WorkloadRef{Namespace: ns, Name: name, Kind: kind}
-	now := time.Now()
 
 	var (
 		points         []evidence.Point
@@ -235,11 +239,23 @@ func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 	if points == nil {
 		points = []evidence.Point{}
 	}
+	// Timestamps are Unix seconds (UTC instants) end to end: Prometheus -> here -> JSON -> the
+	// browser, which alone converts to its local zone for display. from/to/step describe the
+	// query that ran, so the UI can say how much of the requested range actually has data.
+	if len(points) > 0 {
+		s.logger.Debug("timeseries served", "metric", metric, "points", len(points),
+			"first_unix", points[0].UnixSeconds, "last_unix", points[len(points)-1].UnixSeconds,
+			"window", window.String(), "step", step.String())
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"metric":  metric,
-		"request": request,
-		"limit":   limit,
-		"points":  points,
+		"metric":         metric,
+		"request":        request,
+		"limit":          limit,
+		"points":         points,
+		"from":           from.Unix(),
+		"to":             to.Unix(),
+		"window_seconds": int64(window.Seconds()),
+		"step_seconds":   int64(step.Seconds()),
 	})
 }
 

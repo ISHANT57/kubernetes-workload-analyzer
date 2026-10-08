@@ -203,3 +203,30 @@ exclude unschedulable pods, which hold no node capacity. `Highlights` is a pure,
 with stated thresholds (requests >= 80% of allocatable, usage < 50% of requests). A Grafana link
 remains for deep dives. No new dependency, no new datastore, no new Kubernetes permission.
 **Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-012 Time model: UTC instants everywhere, zone applied only for display
+
+**Problem:** the dashboard chart and Grafana showed different clock times for the same data, and
+the chart's "Last 24 hours" label did not match how much data it showed.
+
+**Findings (measured, not assumed):** timestamps were already correct end to end (Prometheus,
+Go API and Grafana returned the same Unix second and the same value). The differences were
+(1) Grafana's bundled dashboards hard-set `"timezone": "utc"` while the browser chart used local
+time, (2) "Last 24 hours" was a hardcoded label while Prometheus held only ~90 minutes of data
+because the cluster was new, and (3) the backend's range ended at `now` with milliseconds, so each
+returned whole-second `t` was up to 999 ms off the instant actually evaluated.
+
+**Decision:**
+- Timestamps are Unix seconds (UTC instants) from Prometheus through the API to the browser; no
+  offset is ever added or removed. The browser formats them in its own zone, shown on the page.
+- `evidence.SeriesRange` aligns both ends of a series query down to the step grid (epoch-based),
+  so each point's `t` is exactly the instant Prometheus evaluated, reproducible by timestamp in
+  Prometheus or Grafana. `/api/timeseries` now also returns `from`, `to`, `window_seconds` and
+  `step_seconds` (the range actually queried, after clamping).
+- The chart's range and label read one constant (`CHART_WINDOW`) and the response, and the page
+  states how much of the requested range has data and which zone the clock uses.
+- `grafana.defaultDashboardsTimezone: browser` so bundled dashboards follow the viewer's zone.
+- `vitest` added as a dev dependency (FREE LOCAL, build-time only) for the first frontend tests.
+**Status: ACCEPTED 2026-10-08**

@@ -17,6 +17,11 @@ kubeApiServer: {enabled: false}
 
 grafana:
   admin: {existingSecret: grafana-admin}   # password never in values or git
+  # Grafana's own default zone is already "browser", but the chart stamps "timezone": "utc" into
+  # every bundled dashboard (this value defaults to utc), which overrides it. "browser" makes
+  # those dashboards use the viewer's local zone, so their axis matches this app's. Display only:
+  # Prometheus stores and returns UTC instants either way. (D-012)
+  defaultDashboardsTimezone: browser
   # LOCAL DEMO ONLY (D-010): anonymous visitors get the read-only Viewer role, so the dashboard's
   # "Investigate in Grafana" links open without a login. Anyone who can reach this Grafana can
   # read the cluster's metrics. Safe here because the port-forward listens on localhost only.

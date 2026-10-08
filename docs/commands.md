@@ -164,6 +164,8 @@ go build ./...
 # frontend
 cd frontend
 npx tsc -b
+npm run lint
+npm test            # vitest: time-zone and time-range helpers
 npm run build
 
 # what is the analyzer actually seeing? (raw evidence per demo fixture, needs :9090 forwarded)

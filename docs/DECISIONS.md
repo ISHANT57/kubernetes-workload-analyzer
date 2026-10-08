@@ -149,7 +149,7 @@ unaffected. Combined single-list aggregation is deferred until there's a concret
 
 ---
 
-## D-0NN: Finding summaries are fixed per-rule templates, not AI-generated
+## D-009 Finding summaries are fixed per-rule templates, not AI-generated
 
 **Problem:** the finding detail page showed raw evidence only; users asked for a plain-language
 reading of each finding.

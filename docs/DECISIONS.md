@@ -250,4 +250,7 @@ raw 5m cadvisor rate (`image!=""`) if the rule has no data. Memory already match
 use Grafana's default 1h view. Verified: 481 of 481 points (CPU and memory, two workloads)
 equal Grafana's own datasource query at the same timestamps. Rule evidence for findings is
 unchanged, so a finding's p95 can differ slightly from the chart's line.
+Chart units follow Grafana's style too: memory as IEC bytes (`36.6 MiB`, `200 MiB`) and CPU as plain
+cores with three significant digits (`0.00328`). Tables and evidence keep Kubernetes notation
+(`200Mi`, `57m`), which is how requests and limits are written in manifests.
 **Status: ACCEPTED 2026-10-08**

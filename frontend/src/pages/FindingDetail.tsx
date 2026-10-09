@@ -8,7 +8,7 @@ import { CategoryTag, CaveatBadge, ConfidenceBadge, DataQualityBadge, SeverityBa
 import { EmptyState, ErrorState, LoadingState } from '../components/Status'
 import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
-import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
+import { formatBytesIEC, formatCoresPlain, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
 import { CHART_RANGES, CHART_WINDOW, browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock } from '../timeRange'
 import type { Finding, Summary, TimeSeriesResponse } from '../api/types'
@@ -239,7 +239,7 @@ function UsageChartPanel({ finding, metric, range, actions }: { finding: Finding
             points={data.points}
             request={data.request}
             limit={data.limit}
-            formatValue={metric === 'cpu' ? formatCores : formatBytes}
+            formatValue={metric === 'cpu' ? formatCoresPlain : formatBytesIEC}
             color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
             tickUnit={metric === 'memory' ? 1024 * 1024 : undefined}
           />

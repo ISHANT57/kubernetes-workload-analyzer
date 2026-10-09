@@ -1,15 +1,16 @@
 .status-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 20px);
-  gap: 5px;
+  grid-template-columns: repeat(auto-fill, 24px);
+  gap: 6px;
 }
 
 .status-chip {
   display: block;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
   text-decoration: none;
+  transition: transform 0.15s var(--ease);
 }
 
 .status-chip-critical {
@@ -25,8 +26,7 @@
 }
 
 .status-chip:hover {
-  outline: 2px solid var(--color-text);
-  outline-offset: 2px;
+  transform: scale(1.18);
 }
 
 .strip-legend {

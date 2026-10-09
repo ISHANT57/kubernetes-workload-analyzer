@@ -1,44 +1,76 @@
-.shell {
-  min-height: 100%;
-  display: flex;
+#root {
+  padding: var(--space-5);
 }
 
-/* --- Sidebar: flat chrome, hairline divider, no shadow (depth is reserved for content) --- */
+/* The app is one floating, rounded shell over a soft gradient backdrop. The sidebar and the
+   content column scroll independently inside it, so the frame never moves. */
+.shell {
+  display: flex;
+  height: 100%;
+  background: var(--shell-bg);
+  border: 1px solid var(--shell-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shell-shadow);
+  overflow: hidden;
+}
+
 .sidebar {
   width: var(--sidebar-width);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-sunken);
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
   border-right: 1px solid var(--color-border);
-  padding: var(--space-4) var(--space-3);
-  position: sticky;
-  top: 0;
-  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   font-weight: 650;
-  font-size: 0.9rem;
+  font-size: 1rem;
   letter-spacing: -0.01em;
-  padding: var(--space-2) var(--space-2) var(--space-5);
+  padding: 0 var(--space-2);
 }
 
 .brand-mark {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--color-accent);
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   flex-shrink: 0;
+  background: linear-gradient(135deg, #ff7a7a, var(--color-accent));
+  box-shadow: 0 6px 14px -4px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  position: relative;
+}
+
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  border-right-color: transparent;
 }
 
 .nav {
   display: flex;
   flex-direction: column;
+  gap: var(--space-5);
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
   gap: 2px;
+}
+
+.nav-heading {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-3) var(--space-2);
 }
 
 .nav-link {
@@ -47,116 +79,152 @@
   gap: var(--space-3);
   text-decoration: none;
   color: var(--color-text-secondary);
-  padding: 0.5rem var(--space-3);
+  padding: 0.6rem var(--space-3);
   border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 500;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 
 .nav-icon {
   display: inline-flex;
   color: var(--color-text-muted);
+  transition: color 0.15s var(--ease);
 }
 
 .nav-link:hover {
-  background: var(--color-surface);
+  background: var(--color-surface-sunken);
   color: var(--color-text);
 }
 
-.nav-link:hover .nav-icon {
-  color: var(--color-text-secondary);
-}
-
 .nav-link.active {
-  background: var(--color-info-bg);
-  color: var(--color-info-fg);
+  background: var(--nav-active-bg);
+  color: var(--nav-active-fg);
   font-weight: 600;
+  box-shadow: var(--nav-active-shadow);
 }
 
 .nav-link.active .nav-icon {
-  color: var(--color-info-fg);
+  color: var(--nav-active-fg);
 }
 
-/* --- Main column: sticky top bar over a scrolling content area --- */
+.sidebar-foot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sidebar-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.sidebar-foot-label {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+}
+
+.sidebar-cluster .cluster-badge,
+.sidebar-cluster .cluster-switcher {
+  max-width: 100%;
+  width: 100%;
+}
+
+/* --- Main column: its own scroll area inside the shell --- */
 .main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .topbar {
-  height: var(--header-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: 0 var(--space-6);
-  background: var(--color-surface-sunken);
-  border-bottom: 1px solid var(--color-border);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6) 0;
 }
 
 .content {
   flex: 1;
-  padding: var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-6);
 }
 
 .content-inner {
-  max-width: 1280px;
-  margin: 0 auto;
+  /* Fill the column so the breadcrumb, heading and cards share one left edge. The cap only
+     stops cards stretching absurdly on ultra-wide screens. */
+  max-width: 1760px;
+  margin: 0;
 }
 
 @media (max-width: 860px) {
+  #root {
+    padding: 0;
+  }
   .shell {
     flex-direction: column;
+    height: auto;
+    min-height: 100%;
+    margin: 0;
+    border-radius: 0;
+    border: 0;
+    overflow: visible;
   }
   .sidebar {
     width: 100%;
-    height: auto;
-    position: static;
-    padding: var(--space-2) var(--space-3);
-    gap: var(--space-2);
     flex-direction: row;
     align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
     border-right: none;
     border-bottom: 1px solid var(--color-border);
     overflow-x: auto;
   }
   .brand {
     padding: 0;
-    white-space: nowrap;
   }
-  .brand-name {
+  .brand-name,
+  .nav-label,
+  .nav-heading,
+  .sidebar-foot-label {
     display: none;
   }
   .nav {
     flex-direction: row;
     gap: var(--space-1);
   }
-  .nav-link {
-    white-space: nowrap;
-    padding: 0.4rem var(--space-2);
+  .nav-group {
+    flex-direction: row;
   }
-  .nav-label {
-    display: none;
+  .sidebar-foot {
+    margin-top: 0;
+    margin-left: auto;
+    flex-direction: row;
+    align-items: center;
+  }
+  .sidebar-cluster {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .sidebar-cluster .cluster-badge,
+  .sidebar-cluster .cluster-switcher {
+    max-width: 150px;
+  }
+  .main {
+    overflow: visible;
   }
   .topbar {
-    height: auto;
-    padding: var(--space-2) var(--space-4);
-    gap: var(--space-2);
-    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-4) 0;
   }
   .content {
-    padding: var(--space-4);
+    padding: var(--space-3) var(--space-4) var(--space-5);
   }
 }

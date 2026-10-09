@@ -16,7 +16,7 @@
 }
 
 .breadcrumb-sep {
-  opacity: 0.5;
+  color: var(--color-text-muted);
 }
 
 .breadcrumb-page {

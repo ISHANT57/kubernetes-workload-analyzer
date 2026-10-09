@@ -5,6 +5,7 @@ import './Breadcrumb.css'
 
 const PAGE_LABEL: Record<string, string> = {
   '/': 'Overview',
+  '/cluster': 'Cluster',
   '/findings': 'Findings',
   '/workloads': 'Workloads',
   '/analytics': 'Analytics',

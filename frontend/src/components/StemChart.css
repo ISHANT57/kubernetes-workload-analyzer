@@ -1,0 +1,78 @@
+.stems {
+  --stem-h: 190px;
+}
+
+.stems-plot {
+  position: relative;
+  display: grid;
+  height: var(--stem-h);
+  padding-top: 14px;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.stems-ref {
+  position: absolute;
+  inset: 14px 0 auto 0;
+  border-top: 1.5px dashed var(--color-accent);
+  opacity: 0.8;
+}
+
+.stems-ref-tag {
+  position: absolute;
+  top: -11px;
+  right: 0;
+  padding: 1px var(--space-3);
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+
+.stem {
+  position: relative;
+  height: 100%;
+}
+
+.stem-line {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-text-muted);
+  border-radius: 2px;
+  transition: height 0.5s var(--ease);
+}
+
+.stem-dot {
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--color-text);
+  border: 2px solid var(--color-surface);
+  transition: bottom 0.5s var(--ease), transform 0.15s var(--ease);
+}
+
+.stem:hover .stem-dot {
+  transform: scale(1.25);
+}
+
+.stem-top .stem-line {
+  background: var(--color-accent);
+}
+.stem-top .stem-dot {
+  background: var(--color-accent);
+}
+
+.stems-labels {
+  display: grid;
+  margin-top: var(--space-3);
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}

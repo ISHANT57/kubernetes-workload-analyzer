@@ -64,13 +64,15 @@ func (b *Builder) ResolveContainers(ctx context.Context, workload analyzermodel.
 // able to trigger an arbitrarily expensive 7-day-at-fine-resolution query on demand.
 const maxSeriesWindow = 48 * time.Hour
 
+// cpuUsageRule is kube-prometheus-stack's per-container CPU recording rule, the source of Grafana's
+// "CPU Usage" panels.
+const cpuUsageRule = `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m`
+
 // CPUUsageSeries returns CPU usage points (max across live pods at each timestamp) for the
 // dashboard's usage-over-time chart, along with the current request/limit for the reference
 // lines drawn alongside it. window is capped at maxSeriesWindow.
 func (b *Builder) CPUUsageSeries(ctx context.Context, workload analyzermodel.WorkloadRef, container string, window time.Duration, now time.Time) ([]Point, float64, float64, error) {
-	if window > maxSeriesWindow || window <= 0 {
-		window = maxSeriesWindow
-	}
+	window = ClampWindow(window)
 	podNames, err := b.resolvePodNames(ctx, workload)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("resolving pods: %w", err)
@@ -81,8 +83,17 @@ func (b *Builder) CPUUsageSeries(ctx context.Context, workload analyzermodel.Wor
 	ns := workload.Namespace
 	podSelector := podRegex(podNames)
 
-	query := fmt.Sprintf(`max(rate(container_cpu_usage_seconds_total{namespace=%q,pod=~%q,container=%q}[2m])) by (pod)`, ns, podSelector, container)
-	matrix, err := b.Prom.QueryRange(ctx, query, now.Add(-window), now, seriesStep(window))
+	start, end, step := SeriesRange(now, window)
+	// Read the same series Grafana's "CPU Usage" panel reads (kube-prometheus-stack's recording
+	// rule over a 5m rate), so the chart shows Grafana's numbers. A raw rate() evaluated at the
+	// exact grid time differs from the rule's value, which Prometheus evaluates on its own
+	// schedule. If the rule has no data (rules disabled), fall back to the equivalent raw query.
+	ruleQuery := fmt.Sprintf(`max(%s{namespace=%q,pod=~%q,container=%q}) by (pod)`, cpuUsageRule, ns, podSelector, container)
+	matrix, err := b.Prom.QueryRange(ctx, ruleQuery, start, end, step)
+	if err == nil && len(matrix) == 0 {
+		rawQuery := fmt.Sprintf(`max(rate(container_cpu_usage_seconds_total{job="kubelet",metrics_path="/metrics/cadvisor",namespace=%q,pod=~%q,container=%q,image!=""}[5m])) by (pod)`, ns, podSelector, container)
+		matrix, err = b.Prom.QueryRange(ctx, rawQuery, start, end, step)
+	}
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("cpu usage series: %w", err)
 	}
@@ -93,9 +104,7 @@ func (b *Builder) CPUUsageSeries(ctx context.Context, workload analyzermodel.Wor
 
 // MemoryUsageSeries is CPUUsageSeries' memory counterpart.
 func (b *Builder) MemoryUsageSeries(ctx context.Context, workload analyzermodel.WorkloadRef, container string, window time.Duration, now time.Time) ([]Point, float64, float64, error) {
-	if window > maxSeriesWindow || window <= 0 {
-		window = maxSeriesWindow
-	}
+	window = ClampWindow(window)
 	podNames, err := b.resolvePodNames(ctx, workload)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("resolving pods: %w", err)
@@ -106,8 +115,9 @@ func (b *Builder) MemoryUsageSeries(ctx context.Context, workload analyzermodel.
 	ns := workload.Namespace
 	podSelector := podRegex(podNames)
 
-	query := fmt.Sprintf(`max(container_memory_working_set_bytes{namespace=%q,pod=~%q,container=%q}) by (pod)`, ns, podSelector, container)
-	matrix, err := b.Prom.QueryRange(ctx, query, now.Add(-window), now, seriesStep(window))
+	query := fmt.Sprintf(`max(container_memory_working_set_bytes{namespace=%q,pod=~%q,container=%q,image!=""}) by (pod)`, ns, podSelector, container)
+	start, end, step := SeriesRange(now, window)
+	matrix, err := b.Prom.QueryRange(ctx, query, start, end, step)
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("memory usage series: %w", err)
 	}
@@ -116,9 +126,31 @@ func (b *Builder) MemoryUsageSeries(ctx context.Context, workload analyzermodel.
 	return matrixToPoints(matrix), req, limit, nil
 }
 
-// seriesStep picks a chart-friendly resolution: fine enough to look smooth, coarse enough that a
+// SeriesRange is the exact range a series query runs over: window clamped, step chosen, and both
+// ends aligned DOWN to a multiple of step (counted from the Unix epoch, as Grafana does). Aligned
+// ends make every returned timestamp a whole second that is exactly the instant Prometheus
+// evaluated, so a point can be reproduced in Prometheus or Grafana by its timestamp alone, and the
+// chart's samples land on clean clock times. They are UTC instants; no zone is involved.
+func SeriesRange(now time.Time, window time.Duration) (start, end time.Time, step time.Duration) {
+	window = ClampWindow(window)
+	step = SeriesStep(window)
+	end = now.Truncate(step) // Truncate works on the absolute instant: epoch-aligned, zone-free
+	return end.Add(-window), end, step
+}
+
+// ClampWindow returns the window a series query will really use: the requested one, or
+// maxSeriesWindow when it is non-positive or larger than that. Exported so the HTTP layer reports
+// the range that was actually queried, not the one that was asked for.
+func ClampWindow(window time.Duration) time.Duration {
+	if window > maxSeriesWindow || window <= 0 {
+		return maxSeriesWindow
+	}
+	return window
+}
+
+// SeriesStep picks a chart-friendly resolution: fine enough to look smooth, coarse enough that a
 // 48h request stays a few hundred points, not thousands.
-func seriesStep(window time.Duration) time.Duration {
+func SeriesStep(window time.Duration) time.Duration {
 	if window <= 3*time.Hour {
 		return 30 * time.Second
 	}

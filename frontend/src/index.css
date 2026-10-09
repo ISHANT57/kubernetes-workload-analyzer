@@ -1,42 +1,58 @@
-/* Design tokens. Dark-first (the production observability look this dashboard is modelled on),
-   with a light counterpart kept at full parity -- both themes are rendered and checked live, so
-   neither is an afterthought. Every colour below is a token: no component hard-codes a hex. */
+/* Design tokens. Light is the default; dark is applied with data-theme="dark" on <html> by
+   theme.ts (stored choice, else the OS preference). Both themes are checked live. Every colour is
+   a token: no component hard-codes a hex. The rose accent is chrome only (active nav, primary
+   controls); severity colours never borrow it, so "red" always means a finding. */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  /* Surfaces, light theme */
-  --color-bg: #f4f6f9;
-  --color-surface: #ffffff;
+  /* Surfaces */
+  --color-bg: #e9e8e6;
+  --color-surface: #f9f8f6;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #eef1f5;
-  --color-border: #e3e7ee;
-  --color-border-strong: #cfd6e0;
+  --color-surface-sunken: #efeeeb;
+  --color-border: #e0ddd8;
+  --color-border-strong: #c9c5be;
 
-  /* Text, light theme */
-  --color-text: #141a22;
-  --color-text-secondary: #4a5667;
-  --color-text-muted: #6b7889;
+  --color-text: #1c1b1a;
+  --color-text-secondary: #46423d;
+  --color-text-muted: #6b665f;
 
-  /* Status: -fg is the readable foreground / solid fill, -bg the tinted background */
-  --color-critical-bg: #fde6e4;
-  --color-critical-fg: #c0362c;
-  --color-warning-bg: #fcefd6;
-  --color-warning-fg: #9a6410;
-  --color-info-bg: #e2ecfd;
-  --color-info-fg: #2563c9;
-  --color-good-bg: #ddf3e6;
-  --color-good-fg: #1c7a46;
-  --color-muted-bg: #eaedf2;
-  --color-muted-fg: #5d6a7c;
-  --color-accent-bg: #ece4fc;
-  --color-accent-fg: #6b40c8;
+  --color-critical-bg: #fbe2df;
+  --color-critical-fg: #a31f17;
+  --color-warning-bg: #fdf0d9;
+  --color-warning-fg: #8a5200;
+  --color-info-bg: #e6edfd;
+  --color-info-fg: #2347b8;
+  --color-good-bg: #dff5e8;
+  --color-good-fg: #166b3c;
+  --color-muted-bg: #eef0f5;
+  --color-muted-fg: #4f5a6d;
 
-  --color-accent: #2563c9;
+  /* Brand: chrome only (active nav, primary controls). Severity never uses it. */
+  --color-accent: #dc2626;
+  --color-accent-hover: #c41f1f;
+  --color-accent-bg: #ffe3e1;
+  --color-accent-fg: #c4161c;
+  --color-accent-contrast: #ffffff;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* Page backdrop behind the floating shell */
+  --backdrop: #e4e3e1;
+  --shell-bg: #f1f0ee;
+  --shell-border: #fbfaf9;
+  --shell-shadow: 0 24px 60px -28px rgba(40, 30, 20, 0.28);
+
+  /* Active nav item, solid feature cards, KPI numerals: the places the two themes differ in
+     character, not just colour. */
+  --nav-active-bg: var(--color-accent);
+  --nav-active-fg: #ffffff;
+  --nav-active-shadow: 0 6px 14px -6px color-mix(in srgb, var(--color-accent) 70%, transparent);
+  --feature-bg: var(--color-accent);
+  --feature-hatch: rgba(255, 255, 255, 0.1);
+  --kpi-weight: 400;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* One spacing scale, so every gap in the app is a multiple of the same unit */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -44,48 +60,65 @@
   --space-5: 1.5rem;
   --space-6: 2rem;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
-  /* One elevation device, used on content panels only -- chrome stays flat with a hairline
-     border, so depth always signals "this is content", never decoration. */
-  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-card: 0 1px 2px rgba(27, 34, 51, 0.03), 0 6px 20px -8px rgba(27, 34, 51, 0.08);
+  --shadow-hover: 0 2px 4px rgba(27, 34, 51, 0.04), 0 14px 32px -10px rgba(27, 34, 51, 0.14);
 
-  --sidebar-width: 232px;
-  --header-height: 56px;
+  --sidebar-width: 244px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0b0f16;
-    --color-surface: #121823;
-    --color-surface-raised: #182130;
-    --color-surface-sunken: #0e131c;
-    --color-border: #1f2937;
-    --color-border-strong: #2c3a4e;
+:root[data-theme='dark'] {
+  color-scheme: dark;
 
-    --color-text: #e6edf5;
-    --color-text-secondary: #9fb0c4;
-    --color-text-muted: #71829a;
+  --color-bg: #12101c;
+  --color-surface: #1b1829;
+  --color-surface-raised: #221e33;
+  --color-surface-sunken: #161422;
+  --color-border: #2b2740;
+  --color-border-strong: #3a3556;
 
-    --color-critical-bg: #3a1614;
-    --color-critical-fg: #ff7b72;
-    --color-warning-bg: #3a2c12;
-    --color-warning-fg: #e3a53f;
-    --color-info-bg: #15263f;
-    --color-info-fg: #6cafff;
-    --color-good-bg: #12301f;
-    --color-good-fg: #46d18a;
-    --color-muted-bg: #1d2634;
-    --color-muted-fg: #94a3b8;
-    --color-accent-bg: #241b3d;
-    --color-accent-fg: #b795f8;
+  --color-text: #f0eef8;
+  --color-text-secondary: #b6b1cc;
+  --color-text-muted: #9a96b3;
 
-    --color-accent: #6cafff;
+  --color-critical-bg: #3d1820;
+  --color-critical-fg: #ff7a85;
+  --color-warning-bg: #3b2a14;
+  --color-warning-fg: #f0b45a;
+  --color-info-bg: #1f2850;
+  --color-info-fg: #8fabff;
+  --color-good-bg: #123325;
+  --color-good-fg: #4fd696;
+  --color-muted-bg: #25213a;
+  --color-muted-fg: #a39fbd;
 
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.24);
-  }
+  --color-accent: #ff5d84;
+  --color-accent-hover: #ff7a9b;
+  --color-accent-bg: #3a1a2b;
+  --color-accent-fg: #ff8fab;
+  --color-accent-contrast: #1b0d14;
+
+  --backdrop: radial-gradient(1000px 600px at 6% 0%, #3a1f4d 0%, transparent 60%),
+    radial-gradient(900px 600px at 100% 100%, #5a1f3d 0%, transparent 60%), #0d0b16;
+  --shell-bg: rgba(27, 24, 41, 0.78);
+  --shell-border: rgba(255, 255, 255, 0.07);
+  --shell-shadow: 0 30px 80px -24px rgba(0, 0, 0, 0.7);
+
+  --nav-active-bg: var(--color-surface);
+  --nav-active-fg: var(--color-accent-fg);
+  --nav-active-shadow: var(--shadow-card);
+  --feature-bg: linear-gradient(135deg, #e11d58 0%, #be123c 100%);
+  --feature-hatch: rgba(255, 255, 255, 0.08);
+  --kpi-weight: 650;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25), 0 10px 28px -10px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.3), 0 16px 34px -10px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -99,13 +132,24 @@ body,
 }
 
 body {
+  background: var(--backdrop) fixed;
+}
+
+body {
   margin: 0;
-  background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 a {

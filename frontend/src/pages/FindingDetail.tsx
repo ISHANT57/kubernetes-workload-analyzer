@@ -1,14 +1,17 @@
-import { useCallback } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import type { ReactNode } from 'react'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import type { BackState } from '../components/ClickableRow'
 import { getFindings, getTimeseries } from '../api/client'
 import { Card } from '../components/Card'
 import { CategoryTag, CaveatBadge, ConfidenceBadge, DataQualityBadge, SeverityBadge } from '../components/Badges'
-import { ErrorState, LoadingState } from '../components/Status'
+import { EmptyState, ErrorState, LoadingState } from '../components/Status'
 import { UsageChart } from '../components/UsageChart'
 import { usePolling } from '../hooks/usePolling'
-import { formatBytes, formatCores, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
+import { formatBytesIEC, formatCoresPlain, formatEvidenceValue, formatPercent, formatRelativeTime, formatUSD } from '../format'
 import { grafanaWorkloadUrl } from '../grafana'
-import type { Finding, TimeSeriesResponse } from '../api/types'
+import { CHART_RANGES, CHART_WINDOW, browserZone, coverage, describeDuration, describeWindow, describeZone, formatClock } from '../timeRange'
+import type { Finding, Summary, TimeSeriesResponse } from '../api/types'
 
 const CHART_RULES: Record<string, 'cpu' | 'memory'> = { R001: 'cpu', R002: 'memory' }
 
@@ -23,10 +26,8 @@ export function FindingDetail() {
   if (!finding) {
     return (
       <div>
-        <Link className="back-link" to="/findings">
-          ← Back to findings
-        </Link>
-        <ErrorState message={`Finding ${id} was not found in the current findings list (it may have resolved, or a new analysis run replaced it).`} />
+        <BackLink />
+        <EmptyState message="This finding is no longer in the current results. It may have been resolved, or a newer analysis run replaced it." />
       </div>
     )
   }
@@ -34,12 +35,21 @@ export function FindingDetail() {
   return <FindingDetailBody finding={finding} />
 }
 
+/** Returns to the page the person came from (with its filters), else the findings list. */
+function BackLink() {
+  const state = useLocation().state as Partial<BackState> | null
+  const back = state?.back ?? { to: '/findings', label: 'Back to findings' }
+  return (
+    <Link className="back-link" to={back.to}>
+      ← {back.label}
+    </Link>
+  )
+}
+
 function FindingDetailBody({ finding: f }: { finding: Finding }) {
   return (
     <div>
-      <Link className="back-link" to="/findings">
-        ← Back to findings
-      </Link>
+      <BackLink />
       <div className="page-head">
         <h1 className="page-title">
           {f.workload.namespace}/{f.workload.name}
@@ -49,6 +59,8 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
           {f.rule_id} · {f.workload.kind}
         </p>
       </div>
+
+      {f.summary && <SummaryCard summary={f.summary} />}
 
       <Card>
         <div className="badge-row" style={{ marginBottom: 'var(--space-4)' }}>
@@ -146,32 +158,115 @@ function FindingDetailBody({ finding: f }: { finding: Finding }) {
   )
 }
 
-function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' | 'memory' }) {
-  const fetcher = useCallback(
-    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, '24h'),
-    [finding.workload.namespace, finding.workload.name, finding.container, finding.workload.kind, metric],
+function SummaryCard({ summary: s }: { summary: Summary }) {
+  const steps = s.next_steps ?? []
+  const notes = s.notes ?? []
+  return (
+    <Card title="Summary" subtitle="Written from this finding's evidence by fixed rules, the same every time. Not AI." className="summary-card">
+      <div className="summary-grid">
+        <section>
+          <h3 className="summary-heading">What happened</h3>
+          <p className="summary-text">{s.what_happened}</p>
+        </section>
+        <section>
+          <h3 className="summary-heading">Why it matters</h3>
+          <p className="summary-text">{s.why_it_matters}</p>
+        </section>
+      </div>
+      {steps.length > 0 && (
+        <section>
+          <h3 className="summary-heading">What to check next</h3>
+          <ol className="summary-steps">
+            {steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+      {notes.length > 0 && (
+        <ul className="summary-notes">
+          {notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      )}
+    </Card>
   )
-  const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
+}
+
+function UsageChartCard({ finding, metric }: { finding: Finding; metric: 'cpu' | 'memory' }) {
+  const [range, setRange] = useState<string>(CHART_WINDOW)
 
   const grafanaLink = (
     <a href={grafanaWorkloadUrl(finding.workload.namespace, finding.workload.name, finding.workload.kind)} target="_blank" rel="noreferrer">
       Investigate in Grafana ↗
     </a>
   )
+  const picker = (
+    <div className="range-picker" role="group" aria-label="Chart range">
+      {CHART_RANGES.map((r) => (
+        <button key={r} type="button" className={r === range ? 'on' : ''} aria-pressed={r === range} onClick={() => setRange(r)}>
+          {r}
+        </button>
+      ))}
+    </div>
+  )
 
+  // keyed by range: usePolling does not refetch when its fetcher changes, so a new range remounts
+  // the panel and fetches fresh.
+  return <UsageChartPanel key={range} finding={finding} metric={metric} range={range} actions={<>{picker}{grafanaLink}</>} />
+}
+
+function UsageChartPanel({ finding, metric, range, actions }: { finding: Finding; metric: 'cpu' | 'memory'; range: string; actions: ReactNode }) {
+  const fetcher = useCallback(
+    () => getTimeseries(finding.workload.namespace, finding.workload.name, finding.container, metric, finding.workload.kind, range),
+    [finding.workload.namespace, finding.workload.name, finding.container, finding.workload.kind, metric, range],
+  )
+  const series = usePolling<TimeSeriesResponse>(fetcher, 30000)
+
+  const data = series.status === 'ok' ? series.data : null
   return (
-    <Card title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`} subtitle="Last 24 hours" actions={grafanaLink}>
+    <Card
+      title={`${metric === 'cpu' ? 'CPU' : 'Memory'} usage vs request`}
+      subtitle={data ? `Requested: last ${describeWindow(data.window_seconds)}` : undefined}
+      actions={actions}
+    >
       {series.status === 'loading' && <LoadingState label="Loading chart…" />}
       {series.status === 'error' && <ErrorState message={series.error} />}
-      {series.status === 'ok' && (
-        <UsageChart
-          points={series.data.points}
-          request={series.data.request}
-          limit={series.data.limit}
-          formatValue={metric === 'cpu' ? formatCores : formatBytes}
-          color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
-        />
+      {data && (
+        <>
+          <UsageChart
+            points={data.points}
+            request={data.request}
+            limit={data.limit}
+            formatValue={metric === 'cpu' ? formatCoresPlain : formatBytesIEC}
+            color={metric === 'cpu' ? 'var(--color-accent)' : '#a78bfa'}
+            tickUnit={metric === 'memory' ? 1024 * 1024 : undefined}
+          />
+          <TimeCaption data={data} />
+        </>
       )}
     </Card>
+  )
+}
+
+/** States what the chart's clock means and how much of the requested range has data, so the axis
+ * can be matched against Grafana (which may be set to UTC) without guessing. */
+function TimeCaption({ data }: { data: TimeSeriesResponse }) {
+  const cov = coverage(data.points, data.window_seconds, data.step_seconds)
+  if (!cov) return null
+  const zone = browserZone()
+  return (
+    <div className="chart-caption">
+      {cov.partial && (
+        <p>
+          Only {describeDuration(cov.coveredSeconds)} of the last {describeWindow(cov.requestedSeconds)} has data: the earliest sample is at {formatClock(cov.firstT, zone)}. The series, or
+          Prometheus itself, is newer than the range requested.
+        </p>
+      )}
+      <p>
+        Times are shown in {describeZone(zone, cov.lastT)}. Latest sample {formatClock(cov.lastT, zone)} ({formatClock(cov.lastT, 'UTC')} UTC).
+      </p>
+    </div>
   )
 }

@@ -42,7 +42,7 @@ export function ClusterSwitcher() {
       }}
       aria-label="Switch cluster"
     >
-      <option value={info.self}>{info.self} (current)</option>
+      <option value={info.self}>{info.self}</option>
       {info.peers.map((p) => (
         <option key={p.id} value={p.id}>
           {p.id}

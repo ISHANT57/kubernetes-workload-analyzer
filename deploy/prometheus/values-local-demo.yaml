@@ -1,0 +1,13 @@
+# LOCAL DEMO ONLY (D-010). Layer this on top of values.yaml for the kind demo:
+#   helm ... -f deploy/prometheus/values.yaml -f deploy/prometheus/values-local-demo.yaml
+#
+# Anonymous visitors get the read-only Viewer role, so the dashboard's "Investigate in Grafana"
+# links open without a login. Anyone who can reach this Grafana can read the cluster's metrics.
+# Safe on the demo only because the port-forward listens on localhost. NEVER apply this file to a
+# shared or production cluster: use values.yaml alone there. The admin login (grafana-admin
+# secret) still works for editing.
+grafana:
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer

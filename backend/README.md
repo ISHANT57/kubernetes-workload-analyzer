@@ -22,7 +22,9 @@ internal/cost/              estimated cost impact -- explicit "Estimated", never
 internal/findings/          orchestrates evidence+rules+cost into a ranked, stably-ID'd list
 internal/runner/            the analysis loop: timer, failure handling, in-memory snapshot
 internal/httpserver/        /healthz /readyz /metrics /api/findings /api/runs/latest
-                             /api/timeseries /api/clusters, and (if STATIC_DIR is set) the built frontend
+                             /api/timeseries /api/clusters /api/cluster/summary, and (if STATIC_DIR is set) the built frontend
+internal/summary/           fixed per-rule plain-language summary of a finding (D-009)
+internal/clustersummary/    cluster-wide capacity/health snapshot from fixed Prometheus queries (D-011)
 internal/metrics/           the analyzer's own Prometheus metrics (self-observability)
 ```
 
@@ -70,6 +72,7 @@ curl localhost:8080/api/findings         # the ranked finding list
 curl 'localhost:8080/api/timeseries?namespace=demo&workload=X&container=c&metric=cpu&window=24h'
 curl localhost:8080/metrics | grep ^analyzer_
 curl localhost:8080/api/clusters         # this cluster's ID + any PEER_CLUSTERS (multi-cluster switcher, D-008)
+curl localhost:8080/api/cluster/summary # nodes, pods, CPU/memory allocatable vs requested vs used, highlights, missing-data list
 ```
 
 ## Multi-cluster (D-008)

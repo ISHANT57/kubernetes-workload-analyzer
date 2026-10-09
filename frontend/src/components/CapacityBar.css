@@ -1,0 +1,72 @@
+.cap-track {
+  position: relative;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--color-muted-bg);
+  overflow: hidden;
+}
+
+.cap-req,
+.cap-use {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: var(--radius-pill);
+  transition: width 0.5s var(--ease);
+}
+
+.cap-req {
+  background: var(--color-border-strong);
+}
+
+.cap-use {
+  background: var(--color-accent);
+}
+
+.cap-legend {
+  margin: var(--space-4) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 0.86rem;
+}
+
+.cap-legend > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.cap-legend dt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.cap-legend dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cap-share {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.cap-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.cap-dot-use {
+  background: var(--color-accent);
+}
+.cap-dot-req {
+  background: var(--color-border-strong);
+}
+.cap-dot-alloc {
+  background: var(--color-muted-bg);
+  border: 1px solid var(--color-border-strong);
+}

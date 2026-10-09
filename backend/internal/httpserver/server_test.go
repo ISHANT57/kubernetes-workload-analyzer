@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,5 +260,72 @@ func TestMetrics_Served(t *testing.T) {
 	}
 	if rec.Body.Len() == 0 {
 		t.Error("GET /metrics: body is empty, want the Prometheus text-exposition format")
+	}
+}
+
+type fakeClusterSummary struct{}
+
+func (fakeClusterSummary) Summary(_ context.Context, now time.Time) model.ClusterSummary {
+	return model.ClusterSummary{ClusterID: "c1", GeneratedAt: now, Highlights: []string{}, Errors: []string{}}
+}
+
+func TestClusterSummary_NotConfigured_501(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", "test-cluster", nil, testLogger())
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/cluster/summary", nil))
+	if rec.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want 501", rec.Code)
+	}
+}
+
+func TestClusterSummary_Configured_200JSON(t *testing.T) {
+	s := New(&fakeLatestProvider{}, nil, "", "test-cluster", nil, testLogger()).WithClusterSummary(fakeClusterSummary{})
+	rec := httptest.NewRecorder()
+	s.ServeHTTP(rec, httptest.NewRequest("GET", "/api/cluster/summary", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"cluster_id":"c1"`) {
+		t.Errorf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTimeseries_ReportsTheRangeThatWasQueried(t *testing.T) {
+	provider := &fakeTimeSeriesProvider{points: []evidence.Point{{UnixSeconds: 1791455700, Value: 0.5}}}
+	s := New(&fakeLatestProvider{}, provider, "", "test-cluster", nil, testLogger())
+
+	for _, tc := range []struct {
+		query                string
+		wantWindow, wantStep int64
+	}{
+		{"window=24h", 86400, 300},
+		{"window=1h", 3600, 30},
+		{"", 86400, 300},              // default is 24h
+		{"window=1000h", 172800, 300}, // clamped to 48h, and the response says so
+		{"window=nonsense", 86400, 300},
+	} {
+		rec := httptest.NewRecorder()
+		s.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/timeseries?namespace=demo&workload=w&container=c&metric=cpu&"+tc.query, nil))
+		var body struct {
+			Points        []evidence.Point `json:"points"`
+			From          int64            `json:"from"`
+			To            int64            `json:"to"`
+			WindowSeconds int64            `json:"window_seconds"`
+			StepSeconds   int64            `json:"step_seconds"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("%q: decoding: %v", tc.query, err)
+		}
+		if body.WindowSeconds != tc.wantWindow || body.StepSeconds != tc.wantStep {
+			t.Errorf("%q: window=%ds step=%ds, want %ds / %ds", tc.query, body.WindowSeconds, body.StepSeconds, tc.wantWindow, tc.wantStep)
+		}
+		if body.To-body.From != tc.wantWindow {
+			t.Errorf("%q: to-from = %d, want %d", tc.query, body.To-body.From, tc.wantWindow)
+		}
+		// Both ends sit on the step grid, so every point is a whole-second, reproducible instant.
+		if body.To%tc.wantStep != 0 || body.From%tc.wantStep != 0 {
+			t.Errorf("%q: from=%d to=%d not aligned to %ds", tc.query, body.From, body.To, tc.wantStep)
+		}
+		// Point timestamps pass through untouched: no offset, no unit change.
+		if len(body.Points) != 1 || body.Points[0].UnixSeconds != 1791455700 {
+			t.Errorf("%q: points = %+v, want t=1791455700 unchanged", tc.query, body.Points)
+		}
 	}
 }

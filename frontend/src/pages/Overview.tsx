@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom'
 import { getFindings, getLatestRun } from '../api/client'
 import { Card } from '../components/Card'
-import { CategoryTag, SeverityBadge } from '../components/Badges'
+import { ClickableRow } from '../components/ClickableRow'
+import { CategoryTag, ConfidenceBadge, SeverityBadge } from '../components/Badges'
 import { KpiRow, KpiTile } from '../components/Kpi'
-import { StatusStrip } from '../components/StatusStrip'
+import { HealthGauge } from '../components/HealthGauge'
+import type { GaugeTone } from '../components/HealthGauge'
+import { SeverityTicks } from '../components/SeverityTicks'
 import { IconCritical, IconCube, IconInfo, IconWarning } from '../components/Icons'
 import { ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
@@ -21,18 +24,27 @@ export function Overview() {
   if (run.status === 'error') return <ErrorState message={run.error} />
   if (findings.status === 'error') return <ErrorState message={findings.error} />
 
+  const back = { to: '/', label: 'Back to dashboard' }
   const r = run.data
   const fs = findings.data
   const critical = fs.filter((f) => f.severity === 'critical').length
   const warning = fs.filter((f) => f.severity === 'warning').length
   const info = fs.filter((f) => f.severity === 'info').length
-  const top = fs.slice(0, 6)
-  const attention = fs.filter((f) => f.severity === 'critical' || f.severity === 'warning').slice(0, 4)
+  const top = fs.slice(0, 8)
+  const attention = fs.filter((f) => f.severity === 'critical' || f.severity === 'warning').slice(0, 3)
+
+  // Share of discovered workloads with no active finding. Deterministic: distinct workloads in
+  // `fs` over workloads_seen. Thresholds are stated on the card (90% / 70%), not implied.
+  const affected = new Set(fs.map((f) => `${f.workload.namespace}/${f.workload.kind}/${f.workload.name}`)).size
+  const hasData = r.workloads_seen > 0
+  const healthyFraction = hasData ? Math.max(0, r.workloads_seen - affected) / r.workloads_seen : 0
+  const gaugeTone: GaugeTone = healthyFraction >= 0.9 ? 'good' : healthyFraction >= 0.7 ? 'warning' : 'critical'
+  const gaugeLabel = !hasData ? 'No data' : healthyFraction >= 0.9 ? 'Healthy' : healthyFraction >= 0.7 ? 'Watch' : 'At risk'
 
   return (
     <div>
       <div className="page-head">
-        <h1 className="page-title">Cluster Overview</h1>
+        <h1 className="page-title">Cluster overview</h1>
         <p className="page-subtitle">Ranked, evidence-backed findings from the latest analysis run.</p>
       </div>
       {(run.stale || findings.stale) && <StaleBanner />}
@@ -52,109 +64,135 @@ export function Overview() {
           tone={warning > 0 ? 'warning' : 'good'}
           icon={<IconWarning />}
         />
-        <KpiTile value={info} label="Info / caveats" hint="Context, not problems" tone={info > 0 ? 'info' : 'neutral'} icon={<IconInfo />} />
+        <KpiTile value={info} label="Info and caveats" hint="Context, not problems" tone={info > 0 ? 'info' : 'neutral'} icon={<IconInfo />} />
         <KpiTile value={r.workloads_seen} label="Workloads" hint="Discovered this run" tone="neutral" icon={<IconCube />} />
       </KpiRow>
 
-      <div className="split-grid">
-        <div>
-          <Card
-            title={`Top findings${fs.length > top.length ? ` (${top.length} of ${fs.length})` : ''}`}
-            subtitle="Health first, then resource, most severe first"
-            className="card--flush"
-          >
-            {top.length === 0 ? (
-              <p className="note">No findings right now. Either everything is right-sized and healthy, or there isn't enough data yet.</p>
-            ) : (
-              <>
-                <ul className="finding-list">
-                  {top.map((f) => (
-                    <li key={f.id}>
-                      <Link className="finding-row" to={`/findings/${f.id}`}>
-                        <SeverityBadge severity={f.severity} />
-                        <CategoryTag category={f.category} />
-                        <span className="workload-name">
-                          {f.workload.namespace}/{f.workload.name}
-                        </span>
-                        <span className="problem">{f.problem}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-                {fs.length > top.length && (
-                  <Link className="card-footer-link" to="/findings">
-                    See all {fs.length} findings
-                  </Link>
-                )}
-              </>
-            )}
-          </Card>
+      <div className="dash-grid">
+        <Card title="Findings by severity" subtitle={`${fs.length} active ${fs.length === 1 ? 'finding' : 'findings'} across ${affected} ${affected === 1 ? 'workload' : 'workloads'}`} className="dash-severity">
+          <SeverityTicks
+            parts={[
+              { severity: 'critical', label: 'Critical', count: critical },
+              { severity: 'warning', label: 'Warning', count: warning },
+              { severity: 'info', label: 'Info', count: info },
+            ]}
+          />
+        </Card>
 
-          {fs.length > 0 && (
-            <Card title="Workload health map" subtitle="One square per workload with an active finding, coloured by worst severity">
-              <StatusStrip findings={fs} />
-            </Card>
-          )}
-        </div>
+        <Card title="Workload health" subtitle="Workloads with no active finding" className="dash-gauge">
+          <HealthGauge
+            fraction={healthyFraction}
+            tone={gaugeTone}
+            label={gaugeLabel}
+            caption={hasData ? `${r.workloads_seen - affected} of ${r.workloads_seen} clear` : 'Nothing discovered yet'}
+          />
+          <p className="note gauge-note">Healthy at 90% or more, watch at 70% or more, at risk below that.</p>
+        </Card>
 
-        <div>
-          <Card title="Needs attention" subtitle="Most severe findings, with their evidence">
-            {attention.length === 0 ? (
-              <p className="note">Nothing critical or warning-level right now.</p>
-            ) : (
-              <div className="attention-list">
-                {attention.map((f) => (
-                  <Link key={f.id} to={`/findings/${f.id}`} className="attention-card">
-                    <div className="attention-head">
-                      <span className="attention-name">
-                        {f.workload.namespace}/{f.workload.name}
-                      </span>
-                      <SeverityBadge severity={f.severity} />
-                    </div>
-                    <p className="attention-problem">{f.problem}</p>
-                    <dl className="attention-evidence">
-                      {f.evidence.slice(0, 2).map((e, i) => (
-                        <div className="attention-evidence-row" key={i}>
-                          <dt>{e.metric.replace(/_/g, ' ')}</dt>
-                          <dd>{formatEvidenceValue(e.value, e.unit)}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          <Card title="Analysis run" className="card--quiet">
-            <div className="kv-grid">
-              <div className="kv-item">
-                <div className="kv-label">Status</div>
-                <div className={`kv-value ${r.status === 'complete' ? 'stat-good' : r.status === 'partial' ? 'stat-warning' : 'stat-critical'}`}>{r.status}</div>
-              </div>
-              <div className="kv-item">
-                <div className="kv-label">Last run</div>
-                <div className="kv-value">{formatRelativeTime(r.started_at)}</div>
-              </div>
-              <div className="kv-item">
-                <div className="kv-label">Duration</div>
-                <div className="kv-value">{r.duration_ms}ms</div>
-              </div>
+        <Card title="Needs attention" subtitle="Most severe first, with evidence" className="dash-attention">
+          {attention.length === 0 ? (
+            <p className="note">Nothing critical or warning-level right now.</p>
+          ) : (
+            <div className="attention-list">
+              {attention.map((f) => (
+                <Link key={f.id} to={`/findings/${f.id}`} state={{ back }} className={`attention-card attention-${f.severity}`}>
+                  <div className="attention-head">
+                    <span className="attention-name">
+                      {f.workload.namespace}/{f.workload.name}
+                    </span>
+                    <SeverityBadge severity={f.severity} />
+                  </div>
+                  <p className="attention-problem">{f.problem}</p>
+                  <dl className="attention-evidence">
+                    {f.evidence.slice(0, 2).map((e, i) => (
+                      <div className="attention-evidence-row" key={i}>
+                        <dt>{e.metric.replace(/_/g, ' ')}</dt>
+                        <dd>{formatEvidenceValue(e.value, e.unit)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Link>
+              ))}
             </div>
-            {r.query_errors.length > 0 && (
-              <>
-                <div className="section-label">Query errors this run</div>
-                <ul className="note">
-                  {r.query_errors.map((e, i) => (
-                    <li key={i}>
-                      <code>{e.source}</code>: {e.message}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </Card>
-        </div>
+          )}
+        </Card>
+
+        <Card title="Latest analysis run" className={`dash-run run-${r.status}`}>
+          <div className="run-status">{r.status}</div>
+          <dl className="run-meta">
+            <div>
+              <dt>Last run</dt>
+              <dd>{formatRelativeTime(r.started_at)}</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd>{r.duration_ms}ms</dd>
+            </div>
+            <div>
+              <dt>Workloads</dt>
+              <dd>{r.workloads_seen}</dd>
+            </div>
+          </dl>
+          {r.query_errors.length > 0 && (
+            <ul className="run-errors">
+              {r.query_errors.map((e, i) => (
+                <li key={i}>
+                  <code>{e.source}</code>: {e.message}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card
+          title="Findings"
+          subtitle="Health first, then resource, most severe first"
+          className="card--flush dash-table"
+          actions={
+            <Link className="pill-link" to="/findings">
+              {fs.length > top.length ? `See all ${fs.length}` : 'Open findings'}
+            </Link>
+          }
+        >
+          {top.length === 0 ? (
+            <p className="note">No findings right now. Either everything is right-sized and healthy, or there isn&apos;t enough data yet.</p>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Workload</th>
+                  <th>Problem</th>
+                  <th>Category</th>
+                  <th>Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top.map((f) => (
+                  <ClickableRow key={f.id} to={`/findings/${f.id}`} back={back}>
+                    <td>
+                      <SeverityBadge severity={f.severity} />
+                    </td>
+                    <td>
+                      <Link to={`/findings/${f.id}`} state={{ back }}>
+                        {f.workload.namespace}/{f.workload.name}
+                      </Link>
+                    </td>
+                    <td className="truncate" title={f.problem}>
+                      {f.problem}
+                    </td>
+                    <td>
+                      <CategoryTag category={f.category} />
+                    </td>
+                    <td>
+                      <ConfidenceBadge confidence={f.confidence} reason={f.confidence_reason} />
+                    </td>
+                  </ClickableRow>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
       </div>
     </div>
   )

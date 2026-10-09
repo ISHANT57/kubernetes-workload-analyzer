@@ -188,4 +188,46 @@ type Finding struct {
 	ConfidenceReason string         `json:"confidence_reason"`
 	Caveats          []string       `json:"caveats"`
 	Cost             *CostImpact    `json:"cost"`
+	Summary          *Summary       `json:"summary"`
+}
+
+// Summary is a plain-language reading of one Finding, produced by fixed per-rule templates in
+// internal/summary from the finding's own evidence -- deterministic and reproducible, never
+// model-generated (AGENTS.md: "AI is never the source of truth"). NextSteps are
+// recommendations for a person to check or do; the analyzer does not act on them.
+type Summary struct {
+	WhatHappened string   `json:"what_happened"`
+	WhyItMatters string   `json:"why_it_matters"`
+	NextSteps    []string `json:"next_steps"`
+	Notes        []string `json:"notes"` // confidence, caveats, and what this finding cannot tell you
+}
+
+// ClusterSummary is a cluster-wide snapshot of capacity and workload health, read from the same
+// Prometheus data a Grafana cluster dashboard shows. Every metric is a pointer: nil means that
+// query failed or returned no series, and the reason is in Errors -- never a zero standing in for
+// "unknown" (AGENTS.md: missing data is an explicit caveat, not a guess).
+type ClusterSummary struct {
+	ClusterID   ClusterID `json:"cluster_id"`
+	GeneratedAt time.Time `json:"generated_at"`
+
+	Nodes       *float64 `json:"nodes"`
+	NodesReady  *float64 `json:"nodes_ready"`
+	Namespaces  *float64 `json:"namespaces"`
+	PodsRunning *float64 `json:"pods_running"`
+	PodsPending *float64 `json:"pods_pending"`
+	PodsFailed  *float64 `json:"pods_failed"`
+
+	CPUAllocatableCores *float64 `json:"cpu_allocatable_cores"`
+	CPURequestedCores   *float64 `json:"cpu_requested_cores"`
+	CPUUsageCores       *float64 `json:"cpu_usage_cores"`
+	MemAllocatableBytes *float64 `json:"mem_allocatable_bytes"`
+	MemRequestedBytes   *float64 `json:"mem_requested_bytes"`
+	MemUsageBytes       *float64 `json:"mem_usage_bytes"`
+
+	Restarts24h *float64 `json:"restarts_24h"`
+
+	// Highlights are plain-language readings of the numbers above, from fixed rules with the
+	// threshold stated in the text. Errors lists every metric that is missing, and why.
+	Highlights []string `json:"highlights"`
+	Errors     []string `json:"errors"`
 }

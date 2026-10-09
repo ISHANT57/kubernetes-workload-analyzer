@@ -1,0 +1,72 @@
+.gauge {
+  margin: 0;
+  position: relative;
+  max-width: 300px;
+  margin-inline: auto;
+}
+
+.gauge svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.gauge-tick {
+  stroke: var(--color-border-strong);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  transition: stroke 0.4s var(--ease);
+}
+
+.gauge-tick-good {
+  stroke: var(--color-good-fg);
+}
+.gauge-tick-warning {
+  stroke: var(--color-warning-fg);
+}
+.gauge-tick-critical {
+  stroke: var(--color-critical-fg);
+}
+
+.gauge-read {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.15;
+}
+
+.gauge-value {
+  font-size: 2.4rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-unit {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+}
+
+.gauge-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.gauge-label-good {
+  color: var(--color-good-fg);
+}
+.gauge-label-warning {
+  color: var(--color-warning-fg);
+}
+.gauge-label-critical {
+  color: var(--color-critical-fg);
+}
+
+.gauge-caption {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}

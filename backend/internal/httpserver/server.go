@@ -36,11 +36,17 @@ type TimeSeriesProvider interface {
 	MemoryUsageSeries(ctx context.Context, workload model.WorkloadRef, container string, window time.Duration, now time.Time) ([]evidence.Point, float64, float64, error)
 }
 
+// ClusterSummaryProvider is implemented by *clustersummary.Provider.
+type ClusterSummaryProvider interface {
+	Summary(ctx context.Context, now time.Time) model.ClusterSummary
+}
+
 // Server serves the analyzer's HTTP endpoints.
 type Server struct {
 	mux       *http.ServeMux
 	latest    LatestProvider
-	builder   TimeSeriesProvider // nil is valid: /api/timeseries then returns 501
+	builder   TimeSeriesProvider     // nil is valid: /api/timeseries then returns 501
+	cluster   ClusterSummaryProvider // nil is valid: /api/cluster/summary then returns 501
 	clusterID string
 	peers     []model.ClusterPeer
 	logger    *slog.Logger
@@ -61,6 +67,7 @@ func New(latest LatestProvider, builder TimeSeriesProvider, staticDir, clusterID
 	s.mux.HandleFunc("GET /api/findings", s.handleFindings)
 	s.mux.HandleFunc("GET /api/timeseries", s.handleTimeseries)
 	s.mux.HandleFunc("GET /api/clusters", s.handleClusters)
+	s.mux.HandleFunc("GET /api/cluster/summary", s.handleClusterSummary)
 	if staticDir != "" {
 		s.mux.HandleFunc("GET /", spaHandler(staticDir))
 	}
@@ -80,6 +87,24 @@ func spaHandler(dir string) http.HandlerFunc {
 		}
 		fileServer.ServeHTTP(w, r)
 	}
+}
+
+// WithClusterSummary enables GET /api/cluster/summary and returns the server for chaining.
+func (s *Server) WithClusterSummary(p ClusterSummaryProvider) *Server {
+	s.cluster = p
+	return s
+}
+
+// handleClusterSummary serves the cluster-wide capacity and health snapshot. Prometheus problems
+// degrade individual fields (listed in "errors") instead of failing the request.
+func (s *Server) handleClusterSummary(w http.ResponseWriter, r *http.Request) {
+	if s.cluster == nil {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "cluster summary not configured"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	writeJSON(w, http.StatusOK, s.cluster.Summary(ctx, time.Now()))
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -181,12 +206,16 @@ func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 			window = d
 		}
 	}
+	// The range actually queried, which can differ from the one asked for (non-positive or
+	// over-long windows are clamped). Computed once and used for both the query and the response.
+	window = evidence.ClampWindow(window)
+	now := time.Now()
+	from, to, step := evidence.SeriesRange(now, window)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
 	wl := model.WorkloadRef{Namespace: ns, Name: name, Kind: kind}
-	now := time.Now()
 
 	var (
 		points         []evidence.Point
@@ -210,11 +239,23 @@ func (s *Server) handleTimeseries(w http.ResponseWriter, r *http.Request) {
 	if points == nil {
 		points = []evidence.Point{}
 	}
+	// Timestamps are Unix seconds (UTC instants) end to end: Prometheus -> here -> JSON -> the
+	// browser, which alone converts to its local zone for display. from/to/step describe the
+	// query that ran, so the UI can say how much of the requested range actually has data.
+	if len(points) > 0 {
+		s.logger.Debug("timeseries served", "metric", metric, "points", len(points),
+			"first_unix", points[0].UnixSeconds, "last_unix", points[len(points)-1].UnixSeconds,
+			"window", window.String(), "step", step.String())
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"metric":  metric,
-		"request": request,
-		"limit":   limit,
-		"points":  points,
+		"metric":         metric,
+		"request":        request,
+		"limit":          limit,
+		"points":         points,
+		"from":           from.Unix(),
+		"to":             to.Unix(),
+		"window_seconds": int64(window.Seconds()),
+		"step_seconds":   int64(step.Seconds()),
 	})
 }
 

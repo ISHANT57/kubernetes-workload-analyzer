@@ -15,6 +15,7 @@ import (
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/evidence"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/model"
 	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/rules"
+	"github.com/ISHANT57/kubernetes-workload-analyzer/backend/internal/summary"
 )
 
 // CostHours is how many hours a CostImpact estimate covers. 730 = the conventional
@@ -77,6 +78,8 @@ func (a *Analyzer) Analyze(ctx context.Context, runID string, workloads []model.
 				if a.HasPricing() && f.Category == model.CategoryResource {
 					f.Cost = costFor(a.Pricing, ev, f)
 				}
+				sum := summary.For(*f)
+				f.Summary = &sum
 				out = append(out, *f)
 			}
 		}

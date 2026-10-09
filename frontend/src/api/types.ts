@@ -36,6 +36,33 @@ export interface CostImpact {
   assumptions: string[]
 }
 
+export interface ClusterSummary {
+  cluster_id: string
+  generated_at: string
+  nodes: number | null
+  nodes_ready: number | null
+  namespaces: number | null
+  pods_running: number | null
+  pods_pending: number | null
+  pods_failed: number | null
+  cpu_allocatable_cores: number | null
+  cpu_requested_cores: number | null
+  cpu_usage_cores: number | null
+  mem_allocatable_bytes: number | null
+  mem_requested_bytes: number | null
+  mem_usage_bytes: number | null
+  restarts_24h: number | null
+  highlights: string[]
+  errors: string[]
+}
+
+export interface Summary {
+  what_happened: string
+  why_it_matters: string
+  next_steps: string[]
+  notes: string[]
+}
+
 export interface Finding {
   id: string
   cluster_id: string
@@ -55,6 +82,7 @@ export interface Finding {
   confidence_reason: string
   caveats: string[] | null
   cost: CostImpact | null
+  summary: Summary | null
 }
 
 export interface QueryError {
@@ -82,7 +110,13 @@ export interface TimeSeriesResponse {
   metric: 'cpu' | 'memory'
   request: number
   limit: number
-  points: TimeSeriesPoint[]
+  points: TimeSeriesPoint[] // t is Unix seconds (a UTC instant), v is the value
+  // The range the backend actually queried, as Unix seconds. window_seconds can be shorter or
+  // longer than asked for if the backend clamped it.
+  from: number
+  to: number
+  window_seconds: number
+  step_seconds: number
 }
 
 export interface ClusterPeer {

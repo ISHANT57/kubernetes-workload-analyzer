@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import './Kpi.css'
 
-export type KpiTone = 'critical' | 'warning' | 'info' | 'good' | 'neutral'
+export type KpiTone = 'critical' | 'warning' | 'info' | 'good' | 'neutral' | 'feature'
 
 interface KpiTileProps {
   value: ReactNode

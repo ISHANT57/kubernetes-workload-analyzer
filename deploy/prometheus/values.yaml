@@ -5,6 +5,7 @@
 #     --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
 #   helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
 #     -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+# (kind demo: add  -f deploy/prometheus/values-local-demo.yaml  for anonymous read-only Grafana.)
 
 alertmanager: {enabled: false}          # no alert routing in MVP
 
@@ -17,15 +18,24 @@ kubeApiServer: {enabled: false}
 
 grafana:
   admin: {existingSecret: grafana-admin}   # password never in values or git
+  # Grafana's own default zone is already "browser", but the chart stamps "timezone": "utc" into
+  # every bundled dashboard (this value defaults to utc), which overrides it. "browser" makes
+  # those dashboards use the viewer's local zone, so their axis matches this app's. Display only:
+  # Prometheus stores and returns UTC instants either way. (D-012)
+  defaultDashboardsTimezone: browser
+  # Anonymous access is OFF here. The local demo turns it on with values-local-demo.yaml (D-010).
   # 384Mi OOMKilled Grafana on startup (exit 137, real live failure 2026-09-29) once
   # kube-prometheus-stack 91.5.0 started shipping Grafana 13.2.2 -- newer than whatever version
   # was current when this limit was first measured/set. Grafana 13.x builds an in-memory search
   # index for its "unified storage" feature at startup ("Building index using memory" in its own
   # logs), a real memory cost the old limit didn't account for. Bumped with headroom; re-measured
   # live after the fix (docs/architecture.md).
+  # 512Mi was OOMKilled twice more on 2026-10-08 (exit 137) while serving the dashboards after the
+  # chart's dashboards were reloaded; steady state is ~350Mi but start-up and reloads spike above
+  # that. Each OOM restarts the pod and drops any kubectl port-forward to it. 768Mi gives headroom.
   resources:
     requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 512Mi}
+    limits: {memory: 768Mi}
 
 kube-state-metrics:
   # Default collectors include secrets and configmaps (list/watch → Secret values).

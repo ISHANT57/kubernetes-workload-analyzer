@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { getFindings } from '../api/client'
 import { Card } from '../components/Card'
+import { ClickableRow } from '../components/ClickableRow'
 import { CategoryTag, ConfidenceBadge, SeverityBadge } from '../components/Badges'
 import { EmptyState, ErrorState, LoadingState, StaleBanner } from '../components/Status'
 import { usePolling } from '../hooks/usePolling'
@@ -9,9 +10,20 @@ import type { Finding } from '../api/types'
 
 export function Findings() {
   const findings = usePolling<Finding[]>(getFindings, 15000)
-  const [namespace, setNamespace] = useState('')
-  const [severity, setSeverity] = useState('')
-  const [category, setCategory] = useState('')
+  // Filters live in the URL, so going to a finding and back (or reloading, or sharing the link)
+  // keeps them. An empty value is removed from the URL rather than stored as "".
+  const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const namespace = params.get('namespace') ?? ''
+  const severity = params.get('severity') ?? ''
+  const category = params.get('category') ?? ''
+  const setFilter = (key: string, value: string) => {
+    const next = new URLSearchParams(params)
+    if (value) next.set(key, value)
+    else next.delete(key)
+    setParams(next, { replace: true })
+  }
+  const back = { to: `${location.pathname}${location.search}`, label: 'Back to findings' }
 
   const namespaces = useMemo(() => {
     if (findings.status !== 'ok') return []
@@ -27,7 +39,7 @@ export function Findings() {
 
   const filters = (
     <div className="filters">
-      <select value={namespace} onChange={(e) => setNamespace(e.target.value)} aria-label="Filter by namespace">
+      <select value={namespace} onChange={(e) => setFilter('namespace', e.target.value)} aria-label="Filter by namespace">
         <option value="">All namespaces</option>
         {namespaces.map((ns) => (
           <option key={ns} value={ns}>
@@ -35,13 +47,13 @@ export function Findings() {
           </option>
         ))}
       </select>
-      <select value={severity} onChange={(e) => setSeverity(e.target.value)} aria-label="Filter by severity">
+      <select value={severity} onChange={(e) => setFilter('severity', e.target.value)} aria-label="Filter by severity">
         <option value="">All severities</option>
         <option value="critical">Critical</option>
         <option value="warning">Warning</option>
         <option value="info">Info</option>
       </select>
-      <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Filter by category">
+      <select value={category} onChange={(e) => setFilter('category', e.target.value)} aria-label="Filter by category">
         <option value="">All categories</option>
         <option value="health">Health</option>
         <option value="resource">Resource</option>
@@ -80,7 +92,7 @@ export function Findings() {
             </thead>
             <tbody>
               {filtered.map((f) => (
-                <tr key={f.id}>
+                <ClickableRow key={f.id} to={`/findings/${f.id}`} back={back}>
                   <td>
                     <SeverityBadge severity={f.severity} />
                   </td>
@@ -88,7 +100,7 @@ export function Findings() {
                     <CategoryTag category={f.category} />
                   </td>
                   <td>
-                    <Link to={`/findings/${f.id}`}>
+                    <Link to={`/findings/${f.id}`} state={{ back }}>
                       {f.workload.namespace}/{f.workload.name}
                       {f.container ? `/${f.container}` : ''}
                     </Link>
@@ -99,7 +111,7 @@ export function Findings() {
                   <td>
                     <ConfidenceBadge confidence={f.confidence} reason={f.confidence_reason} />
                   </td>
-                </tr>
+                </ClickableRow>
               ))}
             </tbody>
           </table>

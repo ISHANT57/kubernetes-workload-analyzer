@@ -2,6 +2,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { useEffect, useRef } from 'react'
 import type { TimeSeriesPoint } from '../api/types'
+import { browserZone, formatAxisTick, formatDateTime, toColumns } from '../timeRange'
 import './UsageChart.css'
 
 interface Props {
@@ -10,12 +11,18 @@ interface Props {
   limit: number
   formatValue: (v: number) => string
   color: string
+  /** Base unit for round y-axis ticks (e.g. 1 MiB in bytes): ticks then fall on 50, 100, 200 of
+   * that unit instead of arbitrary byte counts. Omit for plain numbers like CPU cores. */
+  tickUnit?: number
 }
+
+// Tick spacings, in multiples of the unit, that read as round numbers: 1, 2, 5, 10, 20, 25, 50 ...
+const ROUND_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000]
 
 /** Wraps uPlot (imperative canvas library, not a React component) in a ref-managed container.
  * This is the "usage over time vs request line" chart -- the evidence behind every R001/R002
  * finding, per the original project brief's "important chart". */
-export function UsageChart({ points, request, limit, formatValue, color }: Props) {
+export function UsageChart({ points, request, limit, formatValue, color, tickUnit }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const plotRef = useRef<uPlot | null>(null)
 
@@ -36,19 +43,22 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
     const mutedStroke = styles.getPropertyValue('--color-text-muted').trim() || '#94a3b8'
     const criticalStroke = styles.getPropertyValue('--color-critical-fg').trim() || '#f87171'
 
-    const xs = points.map((p) => p.t)
-    const ys = points.map((p) => p.v)
+    // x is Unix seconds, exactly as the API sent it. uPlot's time axis expects seconds.
+    const { xs, ys } = toColumns(points)
     const requestLine = xs.map(() => request)
+    const zone = browserZone()
 
+    // The hover legend shows the same units as the axis, not raw numbers (bytes, or cores).
+    const legendValue = (_u: uPlot, v: number | null) => (v == null ? '--' : formatValue(v))
     const series: uPlot.Series[] = [
-      {},
-      { label: 'usage', stroke: resolve(color), width: 2, points: { show: false } },
-      { label: 'request', stroke: mutedStroke, width: 1.5, dash: [5, 4], points: { show: false } },
+      { value: (_u: uPlot, t: number | null) => (t == null ? '--' : formatDateTime(t, zone)) },
+      { label: 'usage', stroke: resolve(color), width: 2, points: { show: false }, value: legendValue },
+      { label: 'request', stroke: mutedStroke, width: 1.5, dash: [5, 4], points: { show: false }, value: legendValue },
     ]
     const data: uPlot.AlignedData = [xs, ys, requestLine]
 
     if (limit > 0) {
-      series.push({ label: 'limit', stroke: criticalStroke, width: 1.5, dash: [2, 3], points: { show: false } })
+      series.push({ label: 'limit', stroke: criticalStroke, width: 1.5, dash: [2, 3], points: { show: false }, value: legendValue })
       data.push(xs.map(() => limit))
     }
 
@@ -62,9 +72,18 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
       height: 220,
       series,
       scales: { x: { time: true } },
+      // Presentation only: tick labels and the cursor readout use the browser's zone. The data
+      // stays UTC instants. Stated explicitly so it does not depend on a library default.
+      tzDate: (ts: number) => uPlot.tzDate(new Date(ts * 1000), zone),
       axes: [
-        { ...axis, space: 60 },
-        { ...axis, values: (_u: uPlot, vals: number[]) => vals.map(formatValue), size: 70 },
+        // 24-hour labels in the display zone, as Grafana draws them.
+        { ...axis, space: 60, values: (_u: uPlot, splits: number[]) => splits.map((t) => formatAxisTick(t, zone)) },
+        {
+          ...axis,
+          values: (_u: uPlot, vals: number[]) => vals.map(formatValue),
+          size: 70,
+          ...(tickUnit ? { incrs: ROUND_STEPS.map((n) => n * tickUnit) } : {}),
+        },
       ],
       cursor: { drag: { x: false, y: false } },
       legend: { show: true },
@@ -81,7 +100,7 @@ export function UsageChart({ points, request, limit, formatValue, color }: Props
       plot.destroy()
       plotRef.current = null
     }
-  }, [points, request, limit, formatValue, color])
+  }, [points, request, limit, formatValue, color, tickUnit])
 
   if (points.length === 0) {
     return <div className="chart-empty">No usage data in this window.</div>

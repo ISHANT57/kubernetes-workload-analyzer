@@ -146,3 +146,111 @@ analyzer, so D-007's read-only/least-privilege posture and each cluster's trust 
 unaffected. Combined single-list aggregation is deferred until there's a concrete need for it
 (same "don't build future stages without a reason" principle as the rest of v1).
 **Status: ACCEPTED 2026-09-26**
+
+---
+
+## D-009 Finding summaries are fixed per-rule templates, not AI-generated
+
+**Problem:** the finding detail page showed raw evidence only; users asked for a plain-language
+reading of each finding.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Fixed per-rule templates in the backend (chosen)** | Deterministic and reproducible; every number comes from the finding's own evidence; free; unit-tested; cannot invent facts (AGENTS.md: AI is never the source of truth) | Wording is fixed per rule; a new rule needs a template (a generic fallback covers it meanwhile) |
+| LLM-generated summary | Fluent, adapts to any finding | Non-deterministic; can state causes the data does not support; needs a paid API or a local model; sends pod-derived data to a model |
+
+**Decision:** `internal/summary.For(finding)` is a pure function that returns what happened, why it
+matters, next steps to check, and notes (confidence, caveats, what the rule cannot know). It is
+attached to every finding in `findings.Analyze` and shown on the detail page. Causes the metrics
+cannot establish (why a pod restarted, why it is unschedulable) are stated as things to check,
+never as findings. Cost lines are labelled Estimated, never "savings".
+**Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-010 Grafana anonymous read-only access (local demo only)
+
+**Problem:** the dashboard links each resource finding to Grafana, which asked for a login, a poor
+experience for a local demo.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Anonymous Viewer role, local demo only (chosen)** | Links open straight to the panel; Viewer cannot write (verified: POST returns 403); admin login still works | Anyone who can reach Grafana can read the cluster's metrics |
+| Keep login | Strongest posture | Friction on every link |
+| Remove the Grafana link | No exposure | Loses the drill-down; the in-app chart covers only request vs usage |
+
+**Decision:** `grafana.ini` sets `auth.anonymous` to enabled with the `Viewer` role in
+`deploy/prometheus/values-local-demo.yaml`, a separate overlay layered on `values.yaml` for the kind demo only (moved out of the base file after a security review flagged it; the base file now leaves anonymous access off). Services stay ClusterIP and are reached by port-forward on
+localhost, so nothing is exposed to the network. A shared or production cluster must install
+with `values.yaml` alone. Supersedes the "no anonymous access" stance in the earlier Grafana threat-model row.
+**Status: ACCEPTED 2026-10-08** (owner asked for no login)
+
+---
+
+## D-011 Cluster summary: native Prometheus queries, not an embedded Grafana
+
+**Problem:** show Grafana-style cluster analytics inside the app.
+
+| Option | Pros | Cons |
+|---|---|---|
+| **Native page from fixed Prometheus queries (chosen)** | Same data Grafana shows; matches the app's theme and both modes; works without Grafana running; every number traceable to one query; gaps reported; no iframe | Only the metrics we chose to show, not every Grafana panel |
+| Embed Grafana panels in an iframe | Reuses any existing panel | Needs `allow_embedding` (clickjacking exposure) and anonymous access; clashes with the app's theme; breaks if Grafana is down; cannot show the "what stands out" readings |
+
+**Decision:** `GET /api/cluster/summary` runs 13 fixed instant queries (nodes, pods by phase,
+CPU and memory allocatable/requested/used, restarts) through the existing Prometheus client,
+caches for 15s, and returns each metric as nullable with the failures listed. Requested totals
+exclude unschedulable pods, which hold no node capacity. `Highlights` is a pure, tested function
+with stated thresholds (requests >= 80% of allocatable, usage < 50% of requests). A Grafana link
+remains for deep dives. No new dependency, no new datastore, no new Kubernetes permission.
+**Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-012 Time model: UTC instants everywhere, zone applied only for display
+
+**Problem:** the dashboard chart and Grafana showed different clock times for the same data, and
+the chart's "Last 24 hours" label did not match how much data it showed.
+
+**Findings (measured, not assumed):** timestamps were already correct end to end (Prometheus,
+Go API and Grafana returned the same Unix second and the same value). The differences were
+(1) Grafana's bundled dashboards hard-set `"timezone": "utc"` while the browser chart used local
+time, (2) "Last 24 hours" was a hardcoded label while Prometheus held only ~90 minutes of data
+because the cluster was new, and (3) the backend's range ended at `now` with milliseconds, so each
+returned whole-second `t` was up to 999 ms off the instant actually evaluated.
+
+**Decision:**
+- Timestamps are Unix seconds (UTC instants) from Prometheus through the API to the browser; no
+  offset is ever added or removed. The browser formats them in its own zone, shown on the page.
+- `evidence.SeriesRange` aligns both ends of a series query down to the step grid (epoch-based),
+  so each point's `t` is exactly the instant Prometheus evaluated, reproducible by timestamp in
+  Prometheus or Grafana. `/api/timeseries` now also returns `from`, `to`, `window_seconds` and
+  `step_seconds` (the range actually queried, after clamping).
+- The chart's range and label read one constant (`CHART_WINDOW`) and the response, and the page
+  states how much of the requested range has data and which zone the clock uses.
+- `grafana.defaultDashboardsTimezone: browser` so bundled dashboards follow the viewer's zone.
+- `vitest` added as a dev dependency (FREE LOCAL, build-time only) for the first frontend tests.
+**Status: ACCEPTED 2026-10-08**
+
+---
+
+## D-013 Usage charts read the same series as Grafana
+
+**Problem:** the app's usage chart and Grafana's panel showed slightly different numbers for the
+same pod (for example CPU 4.19m vs 4.35m).
+
+**Measured:** Grafana's "CPU Usage" panel reads kube-prometheus-stack's recording rule
+`node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m`, which Prometheus
+evaluates on its own schedule. A raw `rate(...[5m])` evaluated at an exact grid time differed from
+it by 6.6% on average (up to 69% at one point), and the app's old 2-minute rate by 9%.
+
+**Decision:** the chart's CPU series queries that recording rule, falling back to the equivalent
+raw 5m cadvisor rate (`image!=""`) if the rule has no data. Memory already matched and gains
+`image!=""` for parity. Axis labels are 24-hour (`HH:mm`, `MM/DD` at midnight), the cursor shows
+`YYYY-MM-DD HH:mm:ss`, CPU below 10m shows one decimal, and a 1h/6h/24h/48h picker lets the chart
+use Grafana's default 1h view. Verified: 481 of 481 points (CPU and memory, two workloads)
+equal Grafana's own datasource query at the same timestamps. Rule evidence for findings is
+unchanged, so a finding's p95 can differ slightly from the chart's line.
+Chart units follow Grafana's style too: memory as IEC bytes (`36.6 MiB`, `200 MiB`) and CPU as plain
+cores with three significant digits (`0.00328`). Tables and evidence keep Kubernetes notation
+(`200Mi`, `57m`), which is how requests and limits are written in manifests.
+**Status: ACCEPTED 2026-10-08**

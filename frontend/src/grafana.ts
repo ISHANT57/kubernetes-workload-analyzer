@@ -7,11 +7,15 @@
 // dashboard (uid confirmed via `GET /api/search` against the real Grafana instance, kept as a
 // constant since default dashboard UIDs are stable across chart upgrades in practice but not
 // guaranteed -- if this ever breaks, `curl -u admin:$PW localhost:3000/api/search` finds the
-// current uid). Grafana requires login (no anonymous access, matching the threat model's
-// read-only/least-privilege posture) -- this link is not a bypass of that, the user's own
-// browser session handles it same as visiting Grafana directly.
+// current uid). In the local demo Grafana allows anonymous read-only (Viewer) access, so this link
+// opens without a login (D-010, deploy/prometheus/values-local-demo.yaml). On a cluster installed without that overlay, Grafana asks for a login and the user's own browser session handles it.
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3000'
 const WORKLOAD_DASHBOARD_PATH = '/d/a164a7f0339f99e89cea5cb47e9be617/kubernetes-compute-resources-workload'
+
+/** Grafana's dashboard list, searched for the bundled resource dashboards. */
+export function grafanaDashboardsUrl(): string {
+  return `${GRAFANA_BASE_URL}/dashboards?query=Compute%20Resources`
+}
 
 export function grafanaWorkloadUrl(namespace: string, workload: string, kind: string): string {
   const params = new URLSearchParams({

@@ -18,19 +18,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
-  padding: var(--space-4);
-  position: relative;
-  overflow: hidden;
+  padding: var(--space-5);
+  transition: box-shadow 0.2s var(--ease), transform 0.2s var(--ease);
 }
 
-/* The tone accent is a 3px edge, not a filled card: colour marks severity without turning the
-   whole row into a traffic light. */
-.kpi-tile::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--color-border-strong);
+.kpi-tile:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-1px);
 }
 
 .kpi-head {
@@ -42,22 +36,25 @@
 }
 
 .kpi-label {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .kpi-icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
   color: var(--color-text-muted);
-  opacity: 0.8;
+  background: var(--color-muted-bg);
 }
 
 .kpi-value {
-  font-size: 1.9rem;
-  font-weight: 700;
+  font-size: 2.2rem;
+  font-weight: var(--kpi-weight);
   line-height: 1.05;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -69,34 +66,67 @@
   color: var(--color-text-muted);
 }
 
-.kpi-tile-critical::before {
-  background: var(--color-critical-fg);
-}
 .kpi-tile-critical .kpi-value,
 .kpi-tile-critical .kpi-icon {
   color: var(--color-critical-fg);
 }
 
-.kpi-tile-warning::before {
-  background: var(--color-warning-fg);
-}
 .kpi-tile-warning .kpi-value,
 .kpi-tile-warning .kpi-icon {
   color: var(--color-warning-fg);
 }
 
-.kpi-tile-info::before {
-  background: var(--color-info-fg);
-}
 .kpi-tile-info .kpi-value,
 .kpi-tile-info .kpi-icon {
   color: var(--color-info-fg);
 }
 
-.kpi-tile-good::before {
-  background: var(--color-good-fg);
-}
 .kpi-tile-good .kpi-value,
 .kpi-tile-good .kpi-icon {
   color: var(--color-good-fg);
+}
+
+.kpi-tile-critical .kpi-icon {
+  background: var(--color-critical-bg);
+}
+
+.kpi-tile-warning .kpi-icon {
+  background: var(--color-warning-bg);
+}
+
+.kpi-tile-info .kpi-icon {
+  background: var(--color-info-bg);
+}
+
+.kpi-tile-good .kpi-icon {
+  background: var(--color-good-bg);
+}
+
+/* Feature tile: one solid, hatched accent tile per row, the single loud element. */
+.kpi-tile-feature {
+  position: relative;
+  overflow: hidden;
+  background: var(--feature-bg);
+  border-color: transparent;
+  color: #fff;
+}
+.kpi-tile-feature::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, var(--feature-hatch) 0 2px, transparent 2px 9px);
+  pointer-events: none;
+}
+.kpi-tile-feature > * {
+  position: relative;
+  z-index: 1;
+}
+.kpi-tile-feature .kpi-label,
+.kpi-tile-feature .kpi-hint,
+.kpi-tile-feature .kpi-value,
+.kpi-tile-feature .kpi-icon {
+  color: #fff;
+}
+.kpi-tile-feature .kpi-icon {
+  background: rgba(255, 255, 255, 0.22);
 }

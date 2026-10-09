@@ -3,6 +3,8 @@
 
 export function formatCores(cores: number): string {
   if (cores === 0) return '0m'
+  // Below 10m a whole number hides real differences (4.2m vs 4.4m), so keep one decimal.
+  if (cores < 0.01) return `${(cores * 1000).toFixed(1)}m`
   if (cores < 1) return `${Math.round(cores * 1000)}m`
   return `${cores.toFixed(2)}`
 }
@@ -52,4 +54,35 @@ export function formatEvidenceValue(value: number, unit: string): string {
   // the unit string itself is the meaningful label -- show it plainly instead of "1 OOMKilled".
   if (value === 1 && unit && Number.isNaN(Number(unit))) return unit
   return `${value} ${unit}`.trim()
+}
+
+// --- Chart units, in the style Grafana draws them -------------------------------------------
+// The usage charts sit next to Grafana's panels, so they use the same unit text: memory as IEC
+// bytes ("36.6 MiB"), CPU as plain cores ("0.00328"). Tables elsewhere keep Kubernetes notation
+// ("200Mi", "57m") because that is how requests and limits are written in manifests.
+
+function trimNumber(n: number, decimals: number): string {
+  const fixed = n.toFixed(decimals)
+  // Trim trailing zeros only after a decimal point: "1.50" -> "1.5", but "200" stays "200".
+  return fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed
+}
+
+/** "36.6 MiB", "200 MiB", "1.46 GiB": IEC units with the decimals Grafana shows. */
+export function formatBytesIEC(bytes: number): string {
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+  let v = Math.abs(bytes)
+  let i = 0
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  const decimals = v < 10 ? 2 : v < 100 ? 1 : 0
+  const sign = bytes < 0 ? '-' : ''
+  return `${sign}${trimNumber(v, i === 0 ? 0 : decimals)} ${units[i]}`
+}
+
+/** Cores as a plain number with three significant digits: "0.00328", "0.0045", "0.1", "1.5". */
+export function formatCoresPlain(cores: number): string {
+  if (cores === 0 || Math.abs(cores) < 1e-6) return '0'
+  return trimNumber(Number(cores.toPrecision(3)), 6)
 }

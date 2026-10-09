@@ -1,12 +1,11 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0.15rem 0.45rem;
-  border-radius: var(--radius-sm);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 0.12rem 0.6rem;
+  border-radius: var(--radius-pill);
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -61,9 +60,8 @@
    pill sitting next to it. */
 .badge-category-health,
 .badge-category-resource {
-  background: transparent;
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-strong);
+  background: var(--color-muted-bg);
+  color: var(--color-muted-fg);
 }
 
 .badge-row {

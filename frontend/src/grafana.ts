@@ -8,8 +8,7 @@
 // constant since default dashboard UIDs are stable across chart upgrades in practice but not
 // guaranteed -- if this ever breaks, `curl -u admin:$PW localhost:3000/api/search` finds the
 // current uid). In the local demo Grafana allows anonymous read-only (Viewer) access, so this link
-// opens without a login (D-010, deploy/prometheus/values.yaml). On a cluster where that block is
-// removed, Grafana asks for a login and the user's own browser session handles it.
+// opens without a login (D-010, deploy/prometheus/values-local-demo.yaml). On a cluster installed without that overlay, Grafana asks for a login and the user's own browser session handles it.
 const GRAFANA_BASE_URL = import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3000'
 const WORKLOAD_DASHBOARD_PATH = '/d/a164a7f0339f99e89cea5cb47e9be617/kubernetes-compute-resources-workload'
 

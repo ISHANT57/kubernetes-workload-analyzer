@@ -72,7 +72,8 @@ kubectl -n monitoring create secret generic grafana-admin \
   --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
-  -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+  -n monitoring -f deploy/prometheus/values.yaml \
+  -f deploy/prometheus/values-local-demo.yaml --wait --timeout 10m   # the second file is the local-only demo overlay (D-010)
 kubectl -n monitoring port-forward svc/kps-grafana 3000:80   # Grafana on localhost only
 ```
 
@@ -105,7 +106,8 @@ Phase write-ups (PDF): [docs/reports/](docs/reports/).
 - No stored history (D-004 is not accepted): findings are held in memory and are lost when the pod
   restarts, and the Analytics and Cluster pages are snapshots, not trends.
 - Grafana allows anonymous read-only access in the local demo so finding links open without a
-  login (D-010). Remove that block from `deploy/prometheus/values.yaml` for any shared cluster.
+  login (D-010). That setting lives only in `deploy/prometheus/values-local-demo.yaml`; install a
+  shared cluster with `values.yaml` alone, where anonymous access is off.
   The dashboard and API themselves have no login.
 - Verified only on a local single-node kind cluster, not a real cluster. Cost prices are examples.
 - Finding summaries are fixed templates, not AI (D-009); next steps in them are things to check.

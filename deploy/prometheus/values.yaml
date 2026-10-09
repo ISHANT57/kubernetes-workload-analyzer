@@ -5,6 +5,7 @@
 #     --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
 #   helm install kps prometheus-community/kube-prometheus-stack --version 91.5.0 \
 #     -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+# (kind demo: add  -f deploy/prometheus/values-local-demo.yaml  for anonymous read-only Grafana.)
 
 alertmanager: {enabled: false}          # no alert routing in MVP
 
@@ -22,15 +23,7 @@ grafana:
   # those dashboards use the viewer's local zone, so their axis matches this app's. Display only:
   # Prometheus stores and returns UTC instants either way. (D-012)
   defaultDashboardsTimezone: browser
-  # LOCAL DEMO ONLY (D-010): anonymous visitors get the read-only Viewer role, so the dashboard's
-  # "Investigate in Grafana" links open without a login. Anyone who can reach this Grafana can
-  # read the cluster's metrics. Safe here because the port-forward listens on localhost only.
-  # Do not use on a shared or production cluster: delete this block there. The admin login
-  # (grafana-admin secret) still works for editing.
-  grafana.ini:
-    auth.anonymous:
-      enabled: true
-      org_role: Viewer
+  # Anonymous access is OFF here. The local demo turns it on with values-local-demo.yaml (D-010).
   # 384Mi OOMKilled Grafana on startup (exit 137, real live failure 2026-09-29) once
   # kube-prometheus-stack 91.5.0 started shipping Grafana 13.2.2 -- newer than whatever version
   # was current when this limit was first measured/set. Grafana 13.x builds an in-memory search

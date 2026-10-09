@@ -73,7 +73,8 @@ kubectl --context kind-workload-analyzer -n monitoring create secret generic gra
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm --kube-context kind-workload-analyzer install kps \
   prometheus-community/kube-prometheus-stack --version 91.5.0 \
-  -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+  -n monitoring -f deploy/prometheus/values.yaml -f deploy/prometheus/values-local-demo.yaml \
+  --wait --timeout 10m
 
 kubectl --context kind-workload-analyzer apply -k demo/                     # test fixtures
 kubectl --context kind-workload-analyzer apply -f deploy/rbac/analyzer.yaml # namespace + D-007 RBAC
@@ -81,6 +82,9 @@ kubectl --context kind-workload-analyzer apply -f deploy/rbac/analyzer.yaml # na
 
 Then build and deploy the app (§5).
 
+> `values-local-demo.yaml` turns on anonymous read-only Grafana for the local demo only (D-010); a
+> shared cluster installs with `values.yaml` alone.
+>
 > Helm reports "install complete" before the Prometheus StatefulSet the Operator creates is
 > actually ready. Wait for `prometheus-kps-kube-prometheus-stack-prometheus-0` to reach `2/2`
 > before expecting the analyzer to go `ready` — until then it correctly reports `partial`.
@@ -98,7 +102,8 @@ kubectl --context kind-workload-analyzer-2 -n monitoring create secret generic g
   --from-literal=admin-password="$(openssl rand -base64 24)"
 helm --kube-context kind-workload-analyzer-2 install kps \
   prometheus-community/kube-prometheus-stack --version 91.5.0 \
-  -n monitoring -f deploy/prometheus/values.yaml --wait --timeout 10m
+  -n monitoring -f deploy/prometheus/values.yaml -f deploy/prometheus/values-local-demo.yaml \
+  --wait --timeout 10m
 kubectl --context kind-workload-analyzer-2 apply -k demo/
 kubectl --context kind-workload-analyzer-2 apply -f deploy/rbac/analyzer.yaml
 ```

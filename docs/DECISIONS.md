@@ -180,9 +180,9 @@ experience for a local demo.
 | Remove the Grafana link | No exposure | Loses the drill-down; the in-app chart covers only request vs usage |
 
 **Decision:** `grafana.ini` sets `auth.anonymous` to enabled with the `Viewer` role in
-`deploy/prometheus/values.yaml`. Services stay ClusterIP and are reached by port-forward on
-localhost, so nothing is exposed to the network. This block must be removed for any shared or
-production cluster. Supersedes the "no anonymous access" stance in the earlier Grafana threat-model row.
+`deploy/prometheus/values-local-demo.yaml`, a separate overlay layered on `values.yaml` for the kind demo only (moved out of the base file after a security review flagged it; the base file now leaves anonymous access off). Services stay ClusterIP and are reached by port-forward on
+localhost, so nothing is exposed to the network. A shared or production cluster must install
+with `values.yaml` alone. Supersedes the "no anonymous access" stance in the earlier Grafana threat-model row.
 **Status: ACCEPTED 2026-10-08** (owner asked for no login)
 
 ---
